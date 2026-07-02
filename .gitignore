@@ -1,0 +1,27 @@
+# ── 项目根 .gitignore（约定，即便当前非 git 仓库也保留）──
+
+# 运行时日志（按日期轮转，落盘到项目根 logs/）
+# 详见 logs/README.md
+logs/
+
+# 依赖
+node_modules/
+
+# 构建产物
+backend/dist/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# 环境变量 / 密钥
+.env
+.env.*
+!.env.example
+
+# 数据库 & 本地数据
+*.db
+*.db-journal
+backend/data/
+
+# Windows 保留名
+nul

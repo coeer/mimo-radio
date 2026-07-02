@@ -1,0 +1,44 @@
+{
+  "name": "mimo-backend",
+  "version": "0.1.0",
+  "description": "MiMo AI Radio - Node.js中枢",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.5.1",
+    "helmet": "^8.1.0",
+    "node-ssdp": "^4.0.1",
+    "upnp-device-client": "^1.0.2",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.30",
+    "@types/supertest": "^7.2.0",
+    "@types/uuid": "^9.0.8",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
+    "@vitest/coverage-v8": "^4.1.7",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3",
+    "vitest": "^4.1.6"
+  }
+}
