@@ -2,7 +2,8 @@
 
 > **用途**：让"规划者 AI"（管方向、做深度理解与方案）与"执行者 AI"（按方案落代码、验证、回报）能高效协同。
 > **生成时间**：2026-06-26
-> **项目根**：`D:\Coder\mimo-radio`（Windows，Git Bash，**非 git 仓库**）
+> **项目根**：`D:\Coder\mimo-radio`（Windows，Git Bash）
+> **远程仓库**：`https://github.com/coeer/mimo-radio`
 > **本文档是双方共同的契约**。开始任何工作前，双方都必须完整读完本文档。
 
 ---
@@ -223,6 +224,59 @@ python wb.py evaluate /tmp/e.json
 - 后端实时日志：`logs/dev-backend*.log`
 - 应用日志：`logs/app-YYYY-MM-DD.log`（按天轮转，14 天清理）
 - 诊断 ASR/TTS/换歌：`grep -iE "tts|transition|asr|feedback" logs/dev-backend*.log`
+
+---
+
+## 五-二、Git 版本控制规范
+
+> **项目已接入 GitHub**：`https://github.com/coeer/mimo-radio`。以下为强制执行规则。
+
+### 分支策略
+
+```
+master          ← 永远可运行，不接受直接 commit
+  │
+  ├── feat/*     ← 新功能开发
+  ├── fix/*      ← Bug 修复
+  └── chore/*    ← 清理、文档、配置
+```
+
+- **master 只接受 merge**，不在上面直接改代码
+- 每个任务开独立分支，命名：`feat/描述`、`fix/描述`、`chore/描述`
+- 完成后合并回 master 并 push
+
+### Commit 信息格式
+
+采用 [Conventional Commits](https://www.conventionalcommits.org/)：
+
+```
+feat: DJ 短期记忆注入 chat 回复
+fix: 全屏退出时主题恢复为旧闭包值
+chore: 删除旧审查报告和覆盖率文件
+docs: 添加 Git 规范章节
+```
+
+前缀必须是 `feat` / `fix` / `chore` / `docs` / `test` / `refactor` 之一。
+
+### 工作流（每个任务必须遵守）
+
+```
+1. git checkout master && git pull
+2. git checkout -b feat/xxx   （或 fix/xxx、chore/xxx）
+3. 写代码，改完跑 tsc + vitest
+4. git add <改动文件> && git commit -m "feat: xxx"
+5. git checkout master && git merge feat/xxx
+6. git push origin master
+7. git branch -d feat/xxx
+```
+
+- **一个逻辑变更一条 commit**，不要每改一行就 commit
+- **push 之前必须 tsc 零错误 + vitest 全过**
+- master 的测试基线：后端 ≥251、前端 ≥127
+
+### 自动备份（执行者强制）
+
+每次代码改动完成并验证通过后，**自动 commit + push**，无需规划者提醒。但不允许在 master 上直接 commit——必须走分支。
 
 ---
 
