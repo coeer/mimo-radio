@@ -23,5 +23,11 @@ frontend/dist/
 *.db-journal
 backend/data/
 
+# 测试覆盖率报告
+backend/coverage/
+
+# 工具缓存
+.gstack/
+
 # Windows 保留名
 nul
