@@ -1,5 +1,16 @@
 # MiMo AI Radio
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-14-000?logo=nextdotjs" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black" />
+  <img src="https://img.shields.io/badge/Express-4-000?logo=express" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
+  <img src="https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss" />
+  <img src="https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite" />
+  <img src="https://img.shields.io/badge/AI-MiMo_v2.5-orange" />
+  <img src="https://img.shields.io/badge/test-251%2F127_passed-success?logo=vitest" />
+</p>
+
 AI DJ 电台。你说一句话，它帮你选歌、解说、陪伴。
 
 打开页面，输入"深夜爵士"或"周杰伦的晴天"——MiMo AI 理解你的心情，从网易云和 QQ 音乐找到真实歌曲，生成 DJ 串词，用 TTS 朗读出来。每换一首歌，DJ 都会承接上一首的情绪余韵继续往下说。它记得今晚放过什么，也记得你收藏过哪些歌手，像一个真正的深夜电台主持人。
