@@ -2,10 +2,27 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import SourceSwitcher from '@/components/SourceSwitcher'
+import dynamic from 'next/dynamic'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useRadioStore } from '@/store/radioStore'
 import { API_BASE, getApiHeaders } from '@/lib/config'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+
+/**
+ * 序6C：SourceSwitcher 仅在 /settings 使用，且内部有 fetch + 切换状态机。
+ * ssr: false 推迟到 /settings 进入时再下载。
+ */
+const SourceSwitcher = dynamic(() => import('@/components/SourceSwitcher'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-[var(--fg-muted)] font-[var(--font-mono)]">
+        SOURCE
+      </span>
+      <div className="skeleton w-32 h-7 rounded-full" />
+    </div>
+  ),
+})
 
 interface VoiceInfo {
   id: string
@@ -103,82 +120,100 @@ export default function SettingsPage() {
           </Link>
         </div>
 
-        {/* TTS 音色区 */}
-        <section className="card-enter">
-          <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
-            DJ 音色
-          </h2>
-          <div className="grid grid-cols-2 gap-2.5">
-            {voices.map((v) => {
-              const isSelected = v.id === ttsVoice
-              const isPrev = previewing === v.id
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => previewVoice(v)}
-                  className="rounded-2xl p-3 text-left transition-all"
-                  style={{
-                    background: isSelected ? 'var(--accent-glow)' : 'var(--surface-bg-subtle)',
-                    border: `1px solid ${isSelected ? 'var(--accent-warm)' : 'var(--surface-border-subtle)'}`,
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className="text-[13px] font-medium"
-                      style={{ color: isSelected ? 'var(--accent-warm)' : 'var(--fg-primary)', fontFamily: 'var(--font-display)' }}
-                    >
-                      {v.name}
-                    </span>
-                    <span
-                      className="text-[9px] px-1.5 py-0.5 rounded-full"
-                      style={{
-                        background: isSelected ? 'var(--accent-warm)' : 'var(--surface-border-subtle)',
-                        color: isSelected ? '#fff' : 'var(--fg-muted)',
-                      }}
-                    >
-                      {v.gender}
-                    </span>
-                  </div>
-                  <p className="text-[10px] mb-1.5" style={{ color: 'var(--fg-muted)' }}>
-                    {v.desc}
-                  </p>
-                  <span
-                    className="text-[9px]"
-                    style={{ color: isPrev ? 'var(--neon-green)' : 'var(--fg-dim)', fontFamily: 'var(--font-mono)' }}
+        {/* 设置区独立 ErrorBoundary：
+             - 任何子组件（TTS 列表 / SourceSwitcher / ThemeToggle 等）崩溃都不会影响 Header 和返回链接。
+             - dynamic(SourceSwitcher) 的 chunk 加载失败走 dynamic 自身 loading 状态，不会被 ErrorBoundary 拦截。
+             - 一旦 component 渲染时崩溃，显示降级卡。
+         */}
+        <ErrorBoundary
+          fallback={
+            <div className="rounded-2xl px-4 py-6 surface-card text-center" style={{ border: '1px solid var(--surface-border)' }}>
+              <p className="text-[13px] mb-1" style={{ color: 'var(--fg-primary)', fontFamily: 'var(--font-display)' }}>
+                设置加载失败
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>
+                设置项暂时不可用，可点击顶栏返回电台。
+              </p>
+            </div>
+          }
+        >
+          {/* TTS 音色区 */}
+          <section className="card-enter">
+            <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
+              DJ 音色
+            </h2>
+            <div className="grid grid-cols-2 gap-2.5">
+              {voices.map((v) => {
+                const isSelected = v.id === ttsVoice
+                const isPrev = previewing === v.id
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => previewVoice(v)}
+                    className="rounded-2xl p-3 text-left transition-all"
+                    style={{
+                      background: isSelected ? 'var(--accent-glow)' : 'var(--surface-bg-subtle)',
+                      border: `1px solid ${isSelected ? 'var(--accent-warm)' : 'var(--surface-border-subtle)'}`,
+                    }}
                   >
-                    {isPrev ? '● 试听中…' : '▶ 点击试听'}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          <p className="text-[10px] mt-2" style={{ color: 'var(--fg-dim)' }}>
-            当前音色：{ttsVoice}。点击卡片试听并切换。
-          </p>
-        </section>
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className="text-[13px] font-medium"
+                        style={{ color: isSelected ? 'var(--accent-warm)' : 'var(--fg-primary)', fontFamily: 'var(--font-display)' }}
+                      >
+                        {v.name}
+                      </span>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full"
+                        style={{
+                          background: isSelected ? 'var(--accent-warm)' : 'var(--surface-border-subtle)',
+                          color: isSelected ? '#fff' : 'var(--fg-muted)',
+                        }}
+                      >
+                        {v.gender}
+                      </span>
+                    </div>
+                    <p className="text-[10px] mb-1.5" style={{ color: 'var(--fg-muted)' }}>
+                      {v.desc}
+                    </p>
+                    <span
+                      className="text-[9px]"
+                      style={{ color: isPrev ? 'var(--neon-green)' : 'var(--fg-dim)', fontFamily: 'var(--font-mono)' }}
+                    >
+                      {isPrev ? '● 试听中…' : '▶ 点击试听'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[10px] mt-2" style={{ color: 'var(--fg-dim)' }}>
+              当前音色：{ttsVoice}。点击卡片试听并切换。
+            </p>
+          </section>
 
-        {/* 音源区 */}
-        <section className="card-enter card-enter-delay-1">
-          <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
-            音乐来源
-          </h2>
-          <div className="rounded-2xl px-4 py-3 surface-card">
-            <SourceSwitcher />
-          </div>
-        </section>
+          {/* 音源区 */}
+          <section className="card-enter card-enter-delay-1">
+            <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
+              音乐来源
+            </h2>
+            <div className="rounded-2xl px-4 py-3 surface-card">
+              <SourceSwitcher />
+            </div>
+          </section>
 
-        {/* 主题区 */}
-        <section className="card-enter card-enter-delay-2">
-          <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
-            外观
-          </h2>
-          <div className="rounded-2xl px-4 py-3 surface-card flex items-center justify-between">
-            <span className="text-[12px]" style={{ color: 'var(--fg-secondary)' }}>
-              深色 / 浅色
-            </span>
-            <ThemeToggle />
-          </div>
-        </section>
+          {/* 主题区 */}
+          <section className="card-enter card-enter-delay-2">
+            <h2 className="text-[13px] mb-3" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-display)' }}>
+              外观
+            </h2>
+            <div className="rounded-2xl px-4 py-3 surface-card flex items-center justify-between">
+              <span className="text-[12px]" style={{ color: 'var(--fg-secondary)' }}>
+                深色 / 浅色
+              </span>
+              <ThemeToggle />
+            </div>
+          </section>
+        </ErrorBoundary>
       </div>
     </main>
   )

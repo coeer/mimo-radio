@@ -12,6 +12,7 @@ import ParticleBackground from '@/components/ParticleBackground'
 import PlayerBar from '@/components/PlayerBar'
 import ChatArea from '@/components/ChatArea'
 import InputArea from '@/components/InputArea'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAudioPlayer } from '@/hooks/useAudioPlayer'
 import { useSession } from '@/hooks/useSession'
 import { useRadioStore } from '@/store/radioStore'
@@ -185,6 +186,30 @@ export default function Home() {
         {/* 顶栏：头像+Claudio / 齿轮设置 */}
         <TopBar />
 
+        {/* 主内容区域包一层 ErrorBoundary：
+           - 任何子组件（KimiCard / ChatArea / InputArea 等）崩溃都不会带崩 TopBar，
+             用户依然可以点击顶栏跳到 /plan /profile /settings 继续用。
+           - 不包 layout.tsx 的全局 ErrorBoundary（仍作为最后兜底）。
+         */}
+        <ErrorBoundary
+          fallback={
+            <div className="rounded-2xl px-4 py-6 surface-card text-center" style={{ border: '1px solid var(--surface-border)' }}>
+              <p className="text-[13px] mb-1" style={{ color: 'var(--fg-primary)', fontFamily: 'var(--font-display)' }}>
+                电台主界面加载失败
+              </p>
+              <p className="text-[11px] mb-3" style={{ color: 'var(--fg-muted)' }}>
+                部分视图暂时不可用，可点击顶栏跳转其他页面，或刷新页面恢复。
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-[11px] px-3 py-1.5 rounded-full"
+                style={{ background: 'var(--accent-glow)', color: 'var(--accent-warm)', border: '1px solid var(--accent-glow-strong)' }}
+              >
+                重新加载
+              </button>
+            </div>
+          }
+        >
         {/* 单列内容流 */}
         {/* Clock + ON AIR */}
         <div className="flex flex-col items-center gap-3">
@@ -253,6 +278,7 @@ export default function Home() {
             <QueueList />
           </div>
         )}
+        </ErrorBoundary>
       </div>
 
       {/* Footer */}
