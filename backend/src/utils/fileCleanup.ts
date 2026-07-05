@@ -1,6 +1,6 @@
 import { readdir, stat, unlink } from 'fs/promises'
 import { join } from 'path'
-import { logger } from './logger'
+import { logger, toErrorMeta } from './logger'
 
 export interface CleanupOptions {
   maxFiles?: number
@@ -75,7 +75,7 @@ export async function cleanupAudioFiles(
       logger.info('Audio cleanup completed', { deleted, freedMb: Math.round(freedBytes / 1024 / 1024) })
     }
   } catch (err) {
-    logger.warn('Audio cleanup failed', { error: String(err) })
+    logger.warn('Audio cleanup failed', { ...toErrorMeta(err) })
   }
 
   return { deleted, freedBytes }

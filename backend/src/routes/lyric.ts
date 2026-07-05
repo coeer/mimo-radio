@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { qqMusicService } from '../services/qqmusic'
 import { neteaseService } from '../services/netease'
 import { validateParams } from '../middleware/validate'
-import { logger } from '../utils/logger'
+import { logger, toErrorMeta } from '../utils/logger'
 
 const router = Router()
 
@@ -59,7 +59,7 @@ router.get('/:platform/:id', validateParams(lyricParamsSchema), async (req, res,
       },
     })
   } catch (err) {
-    logger.error('lyric route failed', { error: err instanceof Error ? err.message : String(err) })
+    logger.error('lyric route failed', { ...toErrorMeta(err) })
     next(err)
   }
 })

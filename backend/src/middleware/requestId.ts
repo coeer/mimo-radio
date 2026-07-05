@@ -13,7 +13,7 @@ export function requestId(req: Request, res: Response, next: NextFunction) {
   res.setHeader('X-Request-ID', id)
 
   // Attach to request object for downstream access
-  ;(req as any).requestId = id
+  req.requestId = id
 
   next()
 }

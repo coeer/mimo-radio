@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { join } from 'path'
 import { mkdirSync, existsSync } from 'fs'
 import { Song, RadioSession, UserProfile } from '../types'
-import { logger } from '../utils/logger'
+import { logger, toErrorMeta } from '../utils/logger'
 
 const DATA_DIR = join(__dirname, '../../data')
 const DB_PATH = join(DATA_DIR, 'mimo.db')
@@ -110,7 +110,7 @@ export function saveFeedback(entry: {
       new Date().toISOString(),
     )
   } catch (err) {
-    logger.error('saveFeedback failed', { error: err instanceof Error ? err.message : String(err) })
+    logger.error('saveFeedback failed', { ...toErrorMeta(err) })
   }
 }
 

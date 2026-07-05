@@ -3,6 +3,7 @@ import { Song, SessionContext, DJTransition, AIChatMessage, AIService } from '..
 import { fetchWithTimeout } from '../utils/fetchWithTimeout'
 import { sanitizePromptInput, validatePromptOutput } from '../utils/promptGuard'
 import { logger, toErrorMeta } from '../utils/logger'
+import { extractJsonObject } from '../utils/extractJson'
 import { AI_MAX_TOKENS } from '../constants'
 import { personaPromptBlock } from './djPersona'
 
@@ -132,15 +133,18 @@ ${sanitizePromptInput(userInput)}
     const response = await this.chat([{ role: 'user', content: prompt }])
 
     try {
-      const json = JSON.parse(response.replace(/```json\n?|\n?```/g, ''))
+      const jsonText = extractJsonObject(response)
+      if (!jsonText) throw new Error('no JSON object found')
+      const json = JSON.parse(jsonText)
       return {
         mood: typeof json.mood === 'string' ? json.mood : userInput,
         genres: Array.isArray(json.genres) ? json.genres : [],
         energy: ['high', 'medium', 'low'].includes(json.energy) ? json.energy : 'medium',
         reason: typeof json.reason === 'string' ? json.reason : response.slice(0, 50),
       }
-    } catch {
-      return { mood: userInput, genres: [], energy: 'medium', reason: response.slice(0, 50) }
+    } catch (err) {
+      logger.warn('recommendation strategy JSON parse failed, using neutral fallback', { ...toErrorMeta(err) })
+      return { mood: '随机', genres: [], energy: 'medium', reason: response.slice(0, 50) }
     }
   }
 

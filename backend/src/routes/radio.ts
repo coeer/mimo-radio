@@ -15,7 +15,7 @@ import { signSession } from '../utils/sessionToken'
 import { sanitizePromptInput } from '../utils/promptGuard'
 import { extractDJMemory, djMemoryPromptBlock } from '../utils/djMemory'
 import { extractIntent } from '../utils/songIntent'
-import { logger } from '../utils/logger'
+import { logger, toErrorMeta } from '../utils/logger'
 import { getLikedArtists, getDislikedArtists } from '../db'
 import { setSession, getSession, saveFeedback } from '../db'
 import { AI_CHAT_HISTORY_LIMIT, AI_MESSAGES_RETURN_LIMIT } from '../constants'
@@ -71,7 +71,6 @@ const chatSchema = z.object({
 
 const feedbackSchema = z.object({
   action: z.enum(['skip', 'like', 'unlike', 'complete']),
-  reason: z.string().max(500).optional(),
 })
 
 // Chat response can include a new song to play
@@ -111,7 +110,7 @@ router.post('/create', validateBody(createSchema), async (req, res, next) => {
       await loadNeteaseSongs(keywords)
       songsLoaded = true
     } catch (err) {
-      logger.error('网易云曲库加载失败，继续用现有曲库', { error: String(err) })
+      logger.error('网易云曲库加载失败，继续用现有曲库', { ...toErrorMeta(err) })
     }
 
     const ai = getAIService(model)
@@ -316,7 +315,7 @@ router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res,
 	        action = intent.intent === 'point_song' ? 'play_qqmusic' : 'recommend'
 	        actionData = intent.keyword
 	      } catch (err) {
-	        logger.error('Pre-search failed', { keyword: intent.keyword, error: String(err) })
+	        logger.error('Pre-search failed', { keyword: intent.keyword, ...toErrorMeta(err) })
 	      }
 
 	      // 取第一个可播的作为 newSong（点歌场景）
@@ -441,7 +440,7 @@ router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res,
 	          action = 'play_qqmusic'
 	          actionData = match[1]
 	        } catch (err) {
-	          logger.error('Fallback QQ search failed', { error: String(err) })
+	          logger.error('Fallback QQ search failed', { ...toErrorMeta(err) })
 	        }
 	      }
 	    }
@@ -457,7 +456,7 @@ router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res,
 	          action = 'recommend'
 	          actionData = match[1]
 	        } catch (err) {
-	          logger.error('Fallback recommend search failed', { error: String(err) })
+	          logger.error('Fallback recommend search failed', { ...toErrorMeta(err) })
 	        }
 	      }
 	    }
@@ -509,7 +508,7 @@ router.post('/:id/feedback', feedbackLimiter, sessionAuth, validateBody(feedback
     })
   }
 
-  const { action, reason } = req.body
+  const { action } = req.body
   const currentSong = session.queue[session.currentIndex]
 
   // 持久化反馈到 feedback 表，形成品味闭环（供 profile/personality 分析）
@@ -522,7 +521,7 @@ router.post('/:id/feedback', feedbackLimiter, sessionAuth, validateBody(feedback
       action,
     })
   }
-  logger.info(`Feedback: ${action} on "${currentSong?.title}"`, { reason: reason || undefined })
+  logger.info(`Feedback: ${action} on "${currentSong?.title}"`)
 
   res.json({ ok: true, action, song: currentSong?.title })
 })

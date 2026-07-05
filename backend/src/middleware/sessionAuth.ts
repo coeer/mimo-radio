@@ -35,6 +35,6 @@ export function sessionAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   // Attach verified session ID to request
-  ;(req as any).sessionId = result.sessionId
+  req.sessionId = result.sessionId
   next()
 }

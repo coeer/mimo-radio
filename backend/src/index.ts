@@ -10,7 +10,7 @@ import { errorHandler } from './middleware/error'
 import { apiKeyAuth } from './middleware/auth'
 import { requestId } from './middleware/requestId'
 import { initDb, startSessionCleanup, checkDbHealth } from './db'
-import { logger, cleanupOldLogs } from './utils/logger'
+import { logger, cleanupOldLogs, toErrorMeta } from './utils/logger'
 import { assertSecretConfigured } from './utils/sessionToken'
 import { getCircuitStates } from './utils/fetchWithTimeout'
 
@@ -186,7 +186,7 @@ const server = app.listen(PORT, async () => {
       )
       logger.info('planner 预热完成', { weather: weather?.description || 'unknown' })
     } catch (err) {
-      logger.warn('planner 预热失败（首次访问时会重试）', { error: String(err) })
+      logger.warn('planner 预热失败（首次访问时会重试）', { ...toErrorMeta(err) })
     }
   }, 3000)  // 启动 3s 后预热，不影响启动速度
 })
@@ -197,7 +197,7 @@ server.on('error', (err: Error & { code?: string }) => {
   if (err.code === 'EADDRINUSE') {
     logger.error('Port already in use, exiting', { port: PORT, error: err.message })
   } else {
-    logger.error('Server failed to start', { error: String(err) })
+    logger.error('Server failed to start', { ...toErrorMeta(err) })
   }
   process.exit(1)
 })

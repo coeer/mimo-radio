@@ -5,7 +5,7 @@ import { generateDailyPlan, clearPlanCache } from '../services/planner'
 import { validateQuery } from '../middleware/validate'
 import { getAIService } from '../services/aiFactory'
 import { weatherService } from '../services/weather'
-import { logger } from '../utils/logger'
+import { logger, toErrorMeta } from '../utils/logger'
 
 const router = Router()
 
@@ -53,7 +53,7 @@ router.get('/today', validateQuery(slotQuerySchema), async (_req, res, _next) =>
       res.json(generateDailySchedule())
     }
   } catch (err) {
-    logger.error('schedule/today 失败，兜底', { error: String(err) })
+    logger.error('schedule/today 失败，兜底', { ...toErrorMeta(err) })
     res.json(generateDailySchedule())
   }
 })

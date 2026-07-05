@@ -60,7 +60,7 @@ describe('useAudioPlayer 副作用链路', () => {
     renderHook(() => useAudioPlayer())
     act(() => {
       useRadioStore.setState({
-        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3' },
+        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3', emotionTags: [], sceneTags: [] },
       })
     })
     expect(lastAudio.src).toBe('http://x/song.mp3')
@@ -70,7 +70,7 @@ describe('useAudioPlayer 副作用链路', () => {
     renderHook(() => useAudioPlayer())
     act(() => {
       useRadioStore.setState({
-        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3' },
+        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3', emotionTags: [], sceneTags: [] },
       })
     })
     const playSpy = vi.spyOn(lastAudio, 'play')
@@ -84,7 +84,7 @@ describe('useAudioPlayer 副作用链路', () => {
     renderHook(() => useAudioPlayer())
     act(() => {
       useRadioStore.setState({
-        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3' },
+        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3', emotionTags: [], sceneTags: [] },
         isPlaying: true,
       })
     })
@@ -100,7 +100,7 @@ describe('useAudioPlayer 副作用链路', () => {
     renderHook(() => useAudioPlayer())
     act(() => {
       useRadioStore.setState({
-        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3' },
+        currentSong: { id: '1', title: 't', artist: 'a', playUrl: 'http://x/song.mp3', emotionTags: [], sceneTags: [] },
         nextSong: nextSongMock,
       })
     })
@@ -121,7 +121,7 @@ describe('useAudioPlayer 副作用链路', () => {
     renderHook(() => useAudioPlayer())
     act(() => {
       useRadioStore.setState({
-        currentSong: { id: 'qq1', title: 't', artist: 'a' },
+        currentSong: { id: 'qq1', title: 't', artist: 'a', emotionTags: [], sceneTags: [] },
       })
     })
     // 等异步 fetch 完成

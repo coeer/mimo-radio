@@ -143,7 +143,7 @@ describe('MimoService', () => {
       )
 
       const result = await service.generateRecommendationStrategy('测试', { time: '10:00' }, [])
-      expect(result.mood).toBe('测试')
+      expect(result.mood).toBe('随机')
       expect(result.energy).toBe('medium')
     })
 
