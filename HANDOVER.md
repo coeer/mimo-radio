@@ -38,7 +38,7 @@
 | # | 修复 | 文件 |
 |---|------|------|
 | P0-1 | sessionToken 不持久化到 localStorage | radioStore.ts partialize |
-| P0-2 | MediaSession API 集成（锁屏/耳机控制） | useAudioPlayer.ts（+3 effect）|
+| P0-2 | ~~MediaSession API 集成（锁屏/耳机控制）~~ 已删除（2026-07-05） | ~~useAudioPlayer.ts（+3 effect）~~ |
 | P1-1 | SSRF 防护全局化 + 白名单（含 webbridge localhost） | fetchWithTimeout.ts + ssrfGuard.ts |
 | P1-2 | 音量条连真实 volume | radioStore + KimiCard + useAudioPlayer |
 | P1-3 | RecommendCard 推断 platform | RecommendCardList.tsx + types/api.ts |
@@ -115,7 +115,7 @@
 **前端**：
 - `store/radioStore.ts`（partialize：token+sessionId 都不持久化 + volume 状态）
 - `hooks/useSession.ts`（createSession，原版，**注意：防重入锁已回退**）
-- `hooks/useAudioPlayer.ts`（MediaSession + volume + QQ失败跳过）
+- `hooks/useAudioPlayer.ts`（volume + QQ失败跳过；MediaSession 已删除）
 - `hooks/useTTS.ts`（Fish→MiMo 注释）
 - `app/page.tsx`（引导态 + ref 守卫 + 离线文案）
 - `components/KimiCard.tsx`（音量条 controlled）
@@ -154,7 +154,7 @@
 - ~~DJ recentUserSaid~~：**已完成**。换歌时 DJ 能"听见"用户聊天内容。
 
 ### 🔴 P0（上线前必做，Mavis 审计升级）
-1. **F4 isPlaying 仲裁层缺失**：8 个文件 16+ 写点直接调 setIsPlaying，无单点控制。当前靠 React 批处理兜底，**MediaSession + ASR 上线后触发概率上升**。Mavis 审计论证了从"暂缓"升级到"上线前必做"——第一次遇到锁屏/耳机控制异常再动成本极高。建议引入 `playController` reducer 单点仲裁（见 `docs/reports/audit-2026-07-03-independent-Mavis.md` §3）。
+1. **F4 isPlaying 仲裁层缺失**：8 个文件 13+ 写点直接调 setIsPlaying（原 16 处，MediaSession 删除后降为 13），无单点控制。当前靠 React 批处理兜底，**ASR 上线后触发概率上升**。建议引入 `playController` reducer 单点仲裁（见 `docs/reports/audit-2026-07-03-independent-Mavis.md` §3）。
 
 ### 🟠 P1（影响核心体验，应尽快做）
 2. **AI chat JSON 兜底 mood=userInput**（Mavis P1.1）：`mimo.ts:143` JSON 解析失败时 mood 兜底成完整用户输入 → 喂给 filterByMood 子串匹配 → 意外命中无关标签。**改法**：兜底用中性词（'随机'），复用 extractJsonObject。
@@ -224,7 +224,7 @@ document.body.innerText.match(/ON AIR|PLAYING/)  // 播放状态
 - ✅ 三大视觉界面（首页/全屏/个人主页）
 - ✅ 深色/浅色主题
 - ✅ 键盘控制 + 无障碍
-- ✅ MediaSession（锁屏/耳机控制）
+- ❌ MediaSession（锁屏/耳机控制）—— **已删除**（2026-07-05，用户不需要此功能）
 - ✅ 队列完整可滚动
 - ✅ 引导态首屏（用户输入触发）
 
