@@ -31,7 +31,35 @@ import logRoutes from './routes/log'
 const app = express()
 
 // Security headers
-app.use(helmet())
+// 后端默认仅响应 JSON，CSP 作为兜底防护：
+//   - 防 XSS：未来若有端点返回 HTML，浏览器将按 CSP 限制资源来源
+//   - 与 helmet 其它安全头形成完整链条（X-Content-Type-Options / X-Frame-Options 等仍由默认启用）
+//   - PWA 是前端独立部署，不受后端 CSP 影响；后端响应 JSON 时浏览器不强制 CSP
+//
+// CSP 设计：
+//   - useDefaults: false —— 不与 helmet 默认合并，从零显式声明，避免历史默认值未来变动引入回归
+//   - crossOriginEmbedderPolicy: false —— PWA/前端资源加载兼容；COEP=require-corp 会破坏跨域资源（如网易云封面）
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"], // 后端纯 JSON，禁 inline 即可
+        styleSrc: ["'self'", "'unsafe-inline'"], // 部分 JSON 响应可能含样式数据
+        imgSrc: ["'self'", 'data:'], // 允许 data: base64（封面图等）
+        connectSrc: ["'self'"], // fetch/XHR 限制同源
+        frameSrc: ["'none'"], // 不允许嵌入
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // 防 PWA 兼容性问题（见上行注释）
+  }),
+)
 app.use(compression())
 
 // Rate limiting — general
