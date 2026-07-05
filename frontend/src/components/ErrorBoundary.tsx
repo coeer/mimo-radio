@@ -6,6 +6,12 @@ import { logger } from '../lib/logger'
 interface Props {
   children: ReactNode
   fallback?: ReactNode
+  /**
+   * 错误回调：每条路由的内层 ErrorBoundary 可以传自己的 logger / 上报函数。
+   * 默认仍走 logger.error（保留全局兜底能力）。
+   * 注意：堆栈不要原样暴露到 UI，仅在回调中用于上报。
+   */
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void
 }
 
 interface State {
@@ -24,7 +30,21 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    logger.error('MiMo ErrorBoundary caught', { message: error.message, stack: error.stack, componentStack: errorInfo.componentStack })
+    // 默认行为：内部 logger 上报（不抛错、不影响 UI）
+    logger.error('MiMo ErrorBoundary caught', {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    })
+    // 路由级回调（可有可无），用于注入额外上下文（路由名/用户态等）。
+    // 安全调用，避免 onError 自身抛错导致 React 二次崩。
+    try {
+      this.props.onError?.(error, errorInfo)
+    } catch (cbErr) {
+      logger.warn('MiMo ErrorBoundary onError callback threw', {
+        error: cbErr instanceof Error ? cbErr.message : String(cbErr),
+      })
+    }
   }
 
   render() {
