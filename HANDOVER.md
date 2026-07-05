@@ -139,25 +139,48 @@
 4. **SSRF 白名单**含 `127.0.0.1`/`localhost`（webbridge daemon 是合法本地调用）。
 5. **dev 模式 API 认证放行**（.env 没配 API_KEY，auth.ts 的 dev 便利性，生产 fail-fast）。
 6. **Fish Audio / 飞书已彻底删除**（代码+文档+构建产物）。
-7. **DJ 串词**：generateDJTransition 80-150字，generateIntro 50-100字（对齐视频深度）。
+7. **DJ 串词字数**：intro / transition / chat 三入口统一 **60-120 字**（2026-06-29 统一，原 50-100/80-150/30-80 已废弃）。
 
 ---
 
 ## 五、未完成 / 待办（按优先级）
 
-> 更新于 2026-06-27。已完成项见第四节"关键技术决策"和本轮 plans。
+> 更新于 2026-07-03。整合 Mavis 独立审计发现 + 历史轮次状态修正。
 
-### 🟡 中优先级（已知技术债，暂缓但有记录）
-1. **isPlaying 状态 24+ 写点（F4 架构债）**：8 个文件 24+ 处直接调 `setIsPlaying`，缺仲裁层。当前靠 React 批处理 + Zustand 异步更新兜底，未报告可复现竞态。**触发条件**：出现 TTS resume vs MediaSession 切歌的竞态 bug 时再做架构改造（引入中心化 play/pause action）。
-2. **WebSocket 未实现**（视频 WS /stream，当前 HTTP）。
-3. **用户品味长期记忆**：feedback 已落库（like/skip/complete），但推荐算法不读 feedback。需把收藏的歌手/风格作为搜索加权。
-4. **P2 审查问题**：helmet CSP、颜色对比度（WCAG AA）、next/dynamic 代码分割、独立 ErrorBoundary。
+### ✅ 已完成（原标"待办"但实际已做）
+- ~~用户品味长期记忆~~：**已完成**。feedback 闭环（getLikedArtists → loadNeteaseSongs 搜索加权 + chat/transition tasteBlock 注入）。
+- ~~换歌 isTransitioning 防重入~~：**已完成**。"换台中..."即时反馈 + 4 入口统一守卫。
+- ~~重渲染优化~~：**已完成**。KimiCard/FullscreenPlayer 进度条+歌词抽离 memo 子组件。
+- ~~DJ recentUserSaid~~：**已完成**。换歌时 DJ 能"听见"用户聊天内容。
 
-### 🟢 低优先级
-5. `useAudioPlayer.sideffects.test.ts` 的 5 个既有 tsc 错误（Song 缺 emotionTags，运行时测试通过）。
-6. UPnP / 歌单导入 / 每日规划的端到端测试（依赖外部环境）。
-7. ASR / MediaSession 锁屏控制需真实移动设备验证（webbridge 无法模拟）。
-8. QQ 音源完整链路需 webbridge 开 y.qq.com tab（未覆盖自测）。
+### 🔴 P0（上线前必做，Mavis 审计升级）
+1. **F4 isPlaying 仲裁层缺失**：8 个文件 16+ 写点直接调 setIsPlaying，无单点控制。当前靠 React 批处理兜底，**MediaSession + ASR 上线后触发概率上升**。Mavis 审计论证了从"暂缓"升级到"上线前必做"——第一次遇到锁屏/耳机控制异常再动成本极高。建议引入 `playController` reducer 单点仲裁（见 `docs/reports/audit-2026-07-03-independent-Mavis.md` §3）。
+
+### 🟠 P1（影响核心体验，应尽快做）
+2. **AI chat JSON 兜底 mood=userInput**（Mavis P1.1）：`mimo.ts:143` JSON 解析失败时 mood 兜底成完整用户输入 → 喂给 filterByMood 子串匹配 → 意外命中无关标签。**改法**：兜底用中性词（'随机'），复用 extractJsonObject。
+3. **`/chat` 无取消机制**（Mavis P1.4）：用户连发 3 条 → 3 个 fetch 同时飞 → updateLastKimiMessage 只更新最后一条 → 前两个 AI 回复**丢失但不告知**，token 已消耗。**改法**：AbortController + 按 pending message id 精确替换。
+4. **`String(err)` 漏改 13 处**（Mavis P1.2）：routes/index.ts/db 等 13 处 catch 用 `String(err)` 丢失堆栈。已有 `toErrorMeta` 但未复用。**改法**：机械替换为 `...toErrorMeta(err)`，极低成本。
+5. **AI prompt 样板重复 4 处**（Mavis P1.3）：personaBlock+tasteBlock+memoryBlock 在 intro/transition/chat/recommend 4 处独立拼接。改 persona 要改 4 处。**改法**：抽 `composeSystemPrompt(intent, extras)` 统一构造。
+
+### 🟡 P2（工程债，上线前批量做）
+6. **P2 安全与质量**：helmet CSP 未配、WCAG 颜色对比度未查、next/dynamic 代码分割未做、独立 ErrorBoundary 未做。
+7. **每次 chat 查 liked/disliked DB 4 次**（Mavis P2.1）：无缓存。**改法**：in-memory cache 30s TTL 或 session 开始时读一次。
+8. **reason 字段不喂 AI**（Mavis P3.5）：feedback 的 reason 只存 logger，不进 prompt。要么加 feedback→taste 链路，要么去掉字段（YAGNI）。
+9. **req as any 3 处**（Mavis P2.6）：sessionAuth/requestId/validate 用 `as any` 绕类型。**改法**：扩展 `types/express.d.ts`。
+10. **addMessage O(n²)**（Mavis P2.2）：长会话性能劣化。低优先级。
+
+### 🟢 低优先级 / 需外部环境
+11. `useAudioPlayer.sideffects.test.ts` 5 个既有 tsc 错误（Song 缺 emotionTags）。
+12. UPnP / 歌单导入端到端测试（依赖外部硬件/数据）。
+13. ASR / MediaSession 锁屏控制需真实移动设备验证。
+14. QQ 音源完整链路需 webbridge 开 y.qq.com tab。
+15. TTS mp3 不缓存（Mavis P2.5）、prompt 缓存（Mavis P2.3）——单用户应用低优先级。
+
+### ❌ 已否决（grill-me 审议）
+- ~~SSE 流式文本~~：解决的不是真实瓶颈（AI 生成速度才是）。
+- ~~WebSocket 实时推送~~：LRC 已按时间戳本地高亮，不需服务器推送。
+- ~~上下文推荐（天气融入搜索）~~：用户感知弱，DJ 串词已承担上下文感。
+- ~~波形 RMS~~：CORS 可能解不了，当前降级可接受。
 
 ---
 
