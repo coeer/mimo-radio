@@ -35,7 +35,7 @@ function ThemeToggleImpl() {
             ? 'bg-black/10'
             : 'text-white/40'
         }`}
-        style={{ color: theme === 'light' ? 'var(--fg-primary)' : 'rgba(255,255,255,0.4)' }}
+        style={{ color: theme === 'light' ? 'var(--fg-primary)' : 'rgba(255,255,255,0.55)' }}
       >
         LIGHT
       </span>
