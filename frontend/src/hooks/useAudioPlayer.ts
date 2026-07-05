@@ -15,7 +15,6 @@ export function useAudioPlayer() {
   const isPlaying = useRadioStore((state) => state.isPlaying)
   const isSpeaking = useRadioStore((state) => state.isSpeaking)
   const nextSong = useRadioStore((state) => state.nextSong)
-  const setIsPlaying = useRadioStore((state) => state.setIsPlaying)
   const volume = useRadioStore((state) => state.volume)
 
   // Effect 1: Audio element setup + 连 analyser
@@ -123,90 +122,7 @@ export function useAudioPlayer() {
     }
   }, [isPlaying, isSpeaking, currentSong, resumeAnalyser])
 
-  // Effect 3: MediaSession metadata（锁屏/通知栏/耳机显示歌曲信息）
-  // 仅在 currentSong 变化时更新元数据；actionHandler 单独在 Effect 4 注册。
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
-    if (!currentSong) {
-      navigator.mediaSession.metadata = null
-      return
-    }
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentSong.title,
-        artist: currentSong.artist,
-        album: currentSong.album || 'MiMo Radio',
-        artwork: currentSong.coverUrl
-          ? [{ src: currentSong.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
-          : [],
-      })
-    } catch (e) {
-      // 某些浏览器对 artwork 格式挑剔，忽略构造错误
-      logger.warn('[MediaSession] metadata 设置失败', { error: e instanceof Error ? e.message : String(e) })
-    }
-  }, [currentSong])
-
-  // Effect 4: MediaSession actionHandler（锁屏/耳机线控控制播放）
-  // 注册一次即可，依赖稳定函数；不支持时静默降级。
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
-
-    try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        const audio = audioRef.current
-        setIsPlaying(true)
-        if (audio) audio.play().catch(() => {})
-      })
-      navigator.mediaSession.setActionHandler('pause', () => {
-        const audio = audioRef.current
-        setIsPlaying(false)
-        if (audio) audio.pause()
-      })
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        nextSong().catch((e) => logger.error('MediaSession nexttrack failed', { error: e instanceof Error ? e.message : String(e) }))
-      })
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        // 回到当前歌曲开头（电台语义：无"上一首"历史，退到曲首更直觉）
-        const audio = audioRef.current
-        if (audio) audio.currentTime = 0
-      })
-      // seekto 让进度条可拖动
-      navigator.mediaSession.setActionHandler('seekto', (details: MediaSessionActionDetails) => {
-        const audio = audioRef.current
-        if (audio && details.seekTime != null) {
-          audio.currentTime = details.seekTime
-          useRadioStore.getState().setCurrentTime(details.seekTime)
-        }
-      })
-    } catch (e) {
-      logger.warn('[MediaSession] setActionHandler 注册失败', { error: e instanceof Error ? e.message : String(e) })
-    }
-
-    // 卸载时清除，避免泄漏
-    return () => {
-      try {
-        navigator.mediaSession.setActionHandler('play', null)
-        navigator.mediaSession.setActionHandler('pause', null)
-        navigator.mediaSession.setActionHandler('nexttrack', null)
-        navigator.mediaSession.setActionHandler('previoustrack', null)
-        navigator.mediaSession.setActionHandler('seekto', null)
-      } catch {
-        // 忽略
-      }
-    }
-  }, [setIsPlaying, nextSong])
-
-  // Effect 5: 同步播放状态到 MediaSession（控制中心显示 playing/paused）
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
-    try {
-      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
-    } catch {
-      // 忽略
-    }
-  }, [isPlaying])
-
-  // Effect 6: 音量变化时同步到 audio 元素（跨组件控制，KimiCard 音量条驱动）
+  // Effect 3: 音量变化时同步到 audio 元素（跨组件控制，KimiCard 音量条驱动）
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume
   }, [volume])

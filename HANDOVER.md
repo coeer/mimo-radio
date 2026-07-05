@@ -172,7 +172,7 @@
 ### 🟢 低优先级 / 需外部环境
 11. `useAudioPlayer.sideffects.test.ts` 5 个既有 tsc 错误（Song 缺 emotionTags）。
 12. UPnP / 歌单导入端到端测试（依赖外部硬件/数据）。
-13. ASR / MediaSession 锁屏控制需真实移动设备验证。
+13. ASR 语音输入需真实移动设备验证（MediaSession 已删除，见 `docs/plans/2026-07-05-remove-media-session.md`）。
 14. QQ 音源完整链路需 webbridge 开 y.qq.com tab。
 15. TTS mp3 不缓存（Mavis P2.5）、prompt 缓存（Mavis P2.3）——单用户应用低优先级。
 
