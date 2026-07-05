@@ -16,7 +16,7 @@ import { sanitizePromptInput } from '../utils/promptGuard'
 import { extractDJMemory, djMemoryPromptBlock } from '../utils/djMemory'
 import { extractIntent } from '../utils/songIntent'
 import { logger, toErrorMeta } from '../utils/logger'
-import { getLikedArtists, getDislikedArtists } from '../db'
+import { tasteCache } from '../utils/tasteCache'
 import { setSession, getSession, saveFeedback } from '../db'
 import { AI_CHAT_HISTORY_LIMIT, AI_MESSAGES_RETURN_LIMIT } from '../constants'
 
@@ -218,9 +218,9 @@ router.post('/:id/next', sessionAuth, validateBody(nextBodySchema), async (req, 
         const memory = extractDJMemory(session)
         let memoryBlock = djMemoryPromptBlock(memory)
 
-        // 注入长期品味（用户历史收藏的歌手）
-        const likedArtistsForTransition = getLikedArtists(3)
-        const dislikedArtistsForTransition = getDislikedArtists(3)
+        // 注入长期品味（用户历史收藏的歌手）—— 走 30s 缓存避免每请求查 DB
+        const likedArtistsForTransition = await tasteCache.getLikedArtists(3)
+        const dislikedArtistsForTransition = await tasteCache.getDislikedArtists(3)
         const tasteBlockForTransition = likedArtistsForTransition.length > 0
           ? `\n【用户的长期品味（来自历史收藏）】
 用户喜欢过的歌手：${likedArtistsForTransition.map(a => `${a.artist}(${a.count}次)`).join('、')}
@@ -350,9 +350,9 @@ router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res,
 		    const chatMemory = extractDJMemory(session)
 		    const chatMemoryBlock = djMemoryPromptBlock(chatMemory)
 
-		    // B3：提取长期品味（用户历史收藏的歌手）
-		    const likedArtistsForTaste = getLikedArtists(5)
-		    const dislikedArtistsForTaste = getDislikedArtists(3)
+		    // B3：提取长期品味（用户历史收藏的歌手）—— 走 30s 缓存避免每请求查 DB
+			    const likedArtistsForTaste = await tasteCache.getLikedArtists(5)
+			    const dislikedArtistsForTaste = await tasteCache.getDislikedArtists(3)
 		    const tasteMemoryBlock = likedArtistsForTaste.length > 0
 		      ? `\n【用户的长期品味（来自历史收藏）】
 		用户喜欢过的歌手：${likedArtistsForTaste.map(a => `${a.artist}(${a.count}次)`).join('、')}
@@ -520,6 +520,8 @@ router.post('/:id/feedback', feedbackLimiter, sessionAuth, validateBody(feedback
       songArtist: currentSong.artist,
       action,
     })
+    // 写入新反馈后立即清 taste cache，保证下一次 chat 拿到新品味（P2.1）
+    tasteCache.invalidate()
   }
   logger.info(`Feedback: ${action} on "${currentSong?.title}"`)
 

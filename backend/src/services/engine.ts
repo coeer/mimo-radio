@@ -5,6 +5,7 @@ import { MOCK_SONGS } from '../mockData/songs'
 import { getAllMusicSources } from './musicSource'
 import { logger, toErrorMeta } from '../utils/logger'
 import { getLikedArtists } from '../db'
+import { tasteCache } from '../utils/tasteCache'
 import {
   QUEUE_LENGTH,
   TOP_K_CANDIDATES,
@@ -60,7 +61,8 @@ export async function loadNeteaseSongs(keywords: string[]): Promise<{ songs: Son
 
   // B2：把用户收藏过的歌手加入搜索关键词（品味加权）
   // 偏好歌手追加在用户输入关键词之后——用户意图优先，偏好作为补充丰富曲库
-  const likedArtists = getLikedArtists(3)
+  // 走 30s 缓存（P2.1）：loadNeteaseSongs 在 create 路由被调，不在高频 chat 路径
+  const likedArtists = await tasteCache.getLikedArtists(3)
   const likedKeywords = likedArtists.map(a => a.artist)
   const allKeywords = [...keywords, ...likedKeywords]
 
