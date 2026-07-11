@@ -46,7 +46,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"], // 后端纯 JSON，禁 inline 即可
-        styleSrc: ["'self'", "'unsafe-inline'"], // 部分 JSON 响应可能含样式数据
+        styleSrc: ["'self'"], // 纯 JSON 后端，无 CSS 资源
         imgSrc: ["'self'", 'data:'], // 允许 data: base64（封面图等）
         connectSrc: ["'self'"], // fetch/XHR 限制同源
         frameSrc: ["'none'"], // 不允许嵌入

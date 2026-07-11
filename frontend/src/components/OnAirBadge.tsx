@@ -1,5 +1,3 @@
-'use client'
-
 interface OnAirBadgeProps {
   isLive?: boolean
   className?: string
