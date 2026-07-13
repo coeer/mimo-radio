@@ -183,3 +183,30 @@ export function personaPromptBlock(persona?: DJPersona): string {
 
 请始终以这个人设说话，让用户感觉"这个 DJ 真懂我"。`
 }
+
+/**
+ * composeSystemPrompt 的可选上下文块。
+ *
+ * 注意：recommend（推荐策略）入口不纳入此统一——它是纯 JSON 任务，不用 persona。
+ */
+export interface PromptExtras {
+  memoryBlock?: string
+  tasteBlock?: string
+  searchContext?: string
+  songContext?: string
+}
+
+/**
+ * 统一构造 AI DJ 的 system prompt（P3：避免 4 入口独立拼接导致漂移）。
+ *
+ * 只统一"可复用的 extras 拼接"（persona + 记忆 + 品味 + 搜索上下文 + 歌曲上下文），
+ * 各入口的 intent 特定规则（开场白模板/过渡解说模板/聊天意图分类）仍各自写在 user prompt 里。
+ */
+export function composeSystemPrompt(extras: PromptExtras = {}): string {
+  const sections: string[] = [personaPromptBlock()]
+  if (extras.songContext) sections.push(extras.songContext)
+  if (extras.searchContext) sections.push(extras.searchContext)
+  if (extras.tasteBlock) sections.push(extras.tasteBlock)
+  if (extras.memoryBlock) sections.push(extras.memoryBlock)
+  return sections.join('\n\n')
+}

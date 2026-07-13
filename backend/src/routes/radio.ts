@@ -8,7 +8,7 @@ import { getAIService, listAvailableModels } from '../services/aiFactory'
 import { weatherService } from '../services/weather'
 import { getCurrentPlaylist } from '../services/scheduler'
 import { getMusicSource } from '../services/musicSource'
-import { personaPromptBlock } from '../services/djPersona'
+import { composeSystemPrompt } from '../services/djPersona'
 import { validateBody } from '../middleware/validate'
 import { sessionAuth } from '../middleware/sessionAuth'
 import { signSession } from '../utils/sessionToken'
@@ -360,41 +360,40 @@ router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res,
 		如果你推荐的歌曲里有用户喜欢的歌手，可以自然地提一句"我记得你喜欢XXX的"。`
 		      : ''
 
-		    // 5. 构建 systemPrompt（注入 searchContext + taste + chatMemory）
-	    const systemPrompt = `${personaPromptBlock()}
+		    // 5. 构建 systemPrompt（persona+extras 走 composeSystemPrompt，chat 规则手写）
+		    const systemPrompt = `${composeSystemPrompt({
+		      songContext,
+		      searchContext,
+		      tasteBlock: tasteMemoryBlock,
+		      memoryBlock: chatMemoryBlock,
+		    })}
 
-	你正在和用户聊天，同时担任电台 DJ 的角色。
-	${songContext}
+你正在和用户聊天，同时担任电台 DJ 的角色。
 
-	【最重要规则 - 关键词高亮】你的每一句回复，都必须把情绪、氛围、场景类的关键词用双星号 ** 包裹。
-	示例：
-	- 好呀，**深夜**的**爵士**最有氛围了，让思绪慢慢**沉淀**。
-	- 这首**温暖**的歌，陪你度过**宁静**的夜晚。
-	- 当**疲惫**的时候，听点**治愈**的旋律吧。
-	每句必须有 1-3 个 ** 标记的关键词，这是强制要求。
+【最重要规则 - 关键词高亮】你的每一句回复，都必须把情绪、氛围、场景类的关键词用双星号 ** 包裹。
+示例：
+- 好呀，**深夜**的**爵士**最有氛围了，让思绪慢慢**沉淀**。
+- 这首**温暖**的歌，陪你度过**宁静**的夜晚。
+- 当**疲惫**的时候，听点**治愈**的旋律吧。
+每句必须有 1-3 个 ** 标记的关键词，这是强制要求。
 
-	用户可能想：
-	1. 聊天（问候、分享心情）
-	2. 点歌/换歌（"换一首"、"我想听周杰伦"）
-	3. 询问当前歌曲信息
-	4. 让你推荐音乐
+用户可能想：
+1. 聊天（问候、分享心情）
+2. 点歌/换歌（"换一首"、"我想听周杰伦"）
+3. 询问当前歌曲信息
+4. 让你推荐音乐
 
-	请用温暖自然的语气回复，60-120字。
+请用温暖自然的语气回复，60-120字。
 
-	如果是点歌/换歌请求，你有两种方式：
-	- 从本地曲库换歌：回复中注明[换歌:风格描述]
-	- 从QQ音乐搜索具体歌曲：回复中注明[QQ音乐:歌曲名或歌手名]
+如果是点歌/换歌请求，你有两种方式：
+- 从本地曲库换歌：回复中注明[换歌:风格描述]
+- 从QQ音乐搜索具体歌曲：回复中注明[QQ音乐:歌曲名或歌手名]
 
-	如果是推荐请求，回复中注明[推荐:风格描述]。
-		${searchContext}
+如果是推荐请求，回复中注明[推荐:风格描述]。
 
-		${tasteMemoryBlock}
-
-		${chatMemoryBlock}
-
-		当前时间：${session.context.time}
-	当前天气：${session.context.weather?.description || '未知'}
-	【推荐数量规则】不要在回复中声明具体的推荐数量（如"5首""三首"）。如果需要提及，用模糊表达如"挑了几首""找了些歌"代替具体数字，因为实际可播数量取决于曲库。`
+当前时间：${session.context.time}
+当前天气：${session.context.weather?.description || '未知'}
+【推荐数量规则】不要在回复中声明具体的推荐数量（如"5首""三首"）。如果需要提及，用模糊表达如"挑了几首""找了些歌"代替具体数字，因为实际可播数量取决于曲库。`
 
 	    // Wrap user input in isolated delimiters to prevent prompt injection
 	    const wrappedInput = sanitizePromptInput(text)

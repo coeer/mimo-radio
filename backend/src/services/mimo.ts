@@ -5,7 +5,7 @@ import { sanitizePromptInput, validatePromptOutput } from '../utils/promptGuard'
 import { logger, toErrorMeta } from '../utils/logger'
 import { extractJsonObject } from '../utils/extractJson'
 import { AI_MAX_TOKENS } from '../constants'
-import { personaPromptBlock } from './djPersona'
+import { personaPromptBlock, composeSystemPrompt } from './djPersona'
 
 export class MimoService implements AIService {
   private apiKey: string
@@ -155,16 +155,13 @@ ${sanitizePromptInput(userInput)}
     memoryBlock?: string,
   ): Promise<DJTransition> {
     const safeTags = nextSong.emotionTags.map(t => sanitizePromptInput(t)).join(', ')
-    const personaBlock = personaPromptBlock()
-    const memorySection = memoryBlock || ''
+    const system = composeSystemPrompt({ memoryBlock })
     const prompt = `现在要从 <前一首歌>${sanitizePromptInput(prevSong?.title || '开场')}</前一首歌> 过渡到 <下一首歌>${sanitizePromptInput(nextSong.title)}（${sanitizePromptInput(nextSong.artist)}）。
 
 请按你的人设风格，写一段 60-120 字的过渡解说，包含三层：
 1. 承接：用一两句承接上一首留下的情绪余韵
 2. 故事：讲一点这首歌给你的感觉——旋律的色彩、歌手声线的特质、或它为什么动人（像在和朋友聊一张老唱片）。不要编造具体的发行年份或未经核实的事实。
 3. 此刻：说明为什么此刻适合听它，把人轻轻送进下一段
-
-${memorySection}
 
 参考风格（不要照抄，按你的语气重写）：
 "This is Claudio. It's late on a Monday, and here's a song that moves with your breath. Every line ends in a whisper — you'll feel yourself lift off the ground a little. This one's for the quiet hour."
@@ -180,14 +177,14 @@ ${memorySection}
 只输出过渡解说，不要其他内容、不要标题。`
 
     const text = await this.chat([
-      { role: 'system', content: personaBlock },
+      { role: 'system', content: system },
       { role: 'user', content: prompt },
     ])
     return { text: text.trim() }
   }
 
   async generateIntro(mood: string, context: SessionContext): Promise<string> {
-    const personaBlock = personaPromptBlock()
+    const system = composeSystemPrompt()
     const prompt = `现在电台要开播了。用户想听"${sanitizePromptInput(mood)}"氛围的音乐。
 当前时间：${context.time}，天气：${context.weather?.description || '未知'}。
 
@@ -201,7 +198,7 @@ ${memorySection}
 只输出开场白，不要其他内容。`
 
     return await this.chat([
-      { role: 'system', content: personaBlock },
+      { role: 'system', content: system },
       { role: 'user', content: prompt },
     ])
   }

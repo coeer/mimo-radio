@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { personaPromptBlock, DJPersona } from './djPersona'
+import { personaPromptBlock, composeSystemPrompt, DJPersona } from './djPersona'
 
 // 构造可控人设，避免依赖磁盘上的 data/dj-persona.json
 const makePersona = (over: Partial<DJPersona> = {}): DJPersona => ({
@@ -68,5 +68,38 @@ describe('personaPromptBlock', () => {
     }))
     expect(block).toContain('待探索')
     expect(typeof block).toBe('string')
+  })
+})
+
+// ── P3 composeSystemPrompt ──
+
+describe('composeSystemPrompt (P3)', () => {
+  it('无 extras 时等价于 personaPromptBlock()', () => {
+    expect(composeSystemPrompt()).toBe(personaPromptBlock())
+  })
+
+  it('按固定顺序拼接 songContext/searchContext/tasteBlock/memoryBlock', () => {
+    const result = composeSystemPrompt({
+      songContext: '【当前歌曲】',
+      searchContext: '【搜索结果】',
+      tasteBlock: '【品味】',
+      memoryBlock: '【记忆】',
+    })
+    const persona = personaPromptBlock()
+    const idxPersona = result.indexOf(persona)
+    const idxSong = result.indexOf('【当前歌曲】')
+    const idxSearch = result.indexOf('【搜索结果】')
+    const idxTaste = result.indexOf('【品味】')
+    const idxMemory = result.indexOf('【记忆】')
+    expect(idxPersona).toBeLessThan(idxSong)
+    expect(idxSong).toBeLessThan(idxSearch)
+    expect(idxSearch).toBeLessThan(idxTaste)
+    expect(idxTaste).toBeLessThan(idxMemory)
+  })
+
+  it('undefined 的 extras 不产生多余空行', () => {
+    const result = composeSystemPrompt({ memoryBlock: 'hi' })
+    // 不应有连续 3 个 \n
+    expect(result).not.toMatch(/\n\n\n/)
   })
 })
