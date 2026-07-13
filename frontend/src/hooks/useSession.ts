@@ -11,6 +11,8 @@ export function useSession() {
   const { speak, setHandlers, stop: stopTTS } = useTTS()
   // 防止重复注册 handlers
   const handlersRegistered = useRef(false)
+  // P2 防重入：用户连发消息时，abort 上一个 chat fetch
+  const chatAbortRef = useRef<AbortController | null>(null)
   if (!handlersRegistered.current) {
     /**
      * DJ 解说结束（无论正常结束还是出错）后，自动续播当前歌曲。
@@ -139,14 +141,24 @@ export function useSession() {
       const s = useRadioStore.getState()
       const sid = s.sessionId
       if (!sid) return false
+
+      // P2：abort 上一个 chat 请求（用户连发时旧请求直接取消，省 token + 避免回复错位）
+      if (chatAbortRef.current) {
+        chatAbortRef.current.abort()
+      }
+      const controller = new AbortController()
+      chatAbortRef.current = controller
+
       s.setIsCreating(true)
-      // 立即推一条 pending 占位消息，给用户"AI 正在思考"的实时反馈
-      s.addMessage({ sender: 'kimi', text: '', timestamp: 0, isPending: true })
+      // P2：生成 pending id，传给 addMessage，后续按 id 精确替换（不再用"最后一条 kimi"模糊匹配）
+      const pendingId = crypto.randomUUID()
+      s.addMessage({ id: pendingId, sender: 'kimi', text: '', timestamp: 0, isPending: true })
       try {
         const res = await fetch(`${API_BASE}/api/v1/radio/${sid}/chat`, {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({ text, model: s.currentModel, session_token: s.sessionToken }),
+          signal: controller.signal,
         })
         if (!res.ok) {
           const errText = await res.text()
@@ -154,12 +166,11 @@ export function useSession() {
         }
         const data = await res.json()
         if (data.reply) {
-          // 原地替换 pending 消息为真实回复（保持消息 id，避免重复/跳动）
           s.updateLastKimiMessage(data.reply, {
+            id: pendingId,
             recommendations: data.recommendations || undefined,
             isPending: false,
           })
-          // 合成播放 AI 回复语音；DJ 解说期间不放新歌（见下方 new_song 处理）
           if (djEnabled) {
             speakAIMessage(data.reply)
           }
@@ -169,18 +180,18 @@ export function useSession() {
           s.setQueue([...s.queue, song])
           s.setCurrentSong(song)
           s.setDuration(song.duration || 180)
-          // 关键：DJ 解说优先。不立即播放新歌，避免与正在播的 TTS 语音音轨冲突。
-          // - 有 DJ 解说：speakAIMessage 的 onEnd（resumePlaybackAfterSpeak）会自动放新歌
-          // - 无 DJ 解说（djEnabled=false 或无 reply）：直接播放
           if (!djEnabled || !data.reply) {
             s.setIsPlaying(true)
           }
         }
         return true
       } catch (err) {
+        // P2：abort 不是错误，静默忽略（用户发了新消息，旧请求被取消是预期行为）
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return false
+        }
         logger.error('[Chat] sendChatMessage failed', { error: err instanceof Error ? err.message : String(err) })
-        // pending 占位消息替换为错误提示
-        s.updateLastKimiMessage('网络有点卡，稍后再聊。', { isPending: false })
+        s.updateLastKimiMessage('网络有点卡，稍后再聊。', { id: pendingId, isPending: false })
         return false
       } finally {
         s.setIsCreating(false)

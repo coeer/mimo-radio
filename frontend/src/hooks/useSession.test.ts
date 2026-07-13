@@ -207,4 +207,23 @@ describe('useSession', () => {
 
     expect(useRadioStore.getState().isPlaying).toBe(true)
   })
+
+  // P2 防重入：abort 后应静默返回 false，不显示"网络有点卡"
+  it('sendChatMessage abort 时静默返回 false 不显示错误消息', async () => {
+    useRadioStore.setState({ sessionId: 'sess-abort', sessionToken: 'tok', messages: [] })
+    const abortError = new DOMException('The user aborted a request.', 'AbortError')
+    ;(globalThis as Record<string, unknown>).fetch = vi.fn().mockRejectedValue(abortError)
+
+    const { result } = renderHook(() => useSession())
+    let ret: boolean | undefined
+    await act(async () => {
+      ret = await result.current.sendChatMessage('test')
+    })
+
+    expect(ret).toBe(false)
+    const msgs = useRadioStore.getState().messages
+    // 不应该有"网络有点卡"的错误提示
+    const errorMsg = msgs.find(m => m.text.includes('网络有点卡'))
+    expect(errorMsg).toBeUndefined()
+  })
 })

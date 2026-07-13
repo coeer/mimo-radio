@@ -183,3 +183,63 @@ describe('radioStore', () => {
     expect(useRadioStore.getState().isSpeaking).toBe(false)
   })
 })
+
+// ── P2 防重入：updateLastKimiMessage 精确替换 + addMessage 外部 id ──
+
+describe('updateLastKimiMessage (P2 精确替换)', () => {
+  beforeEach(() => {
+    useRadioStore.setState({ messages: [] })
+  })
+
+  it('传 id 时按 id 精确匹配，只改目标消息', () => {
+    const store = useRadioStore.getState()
+    store.addMessage({ id: 'm1', sender: 'kimi', text: 'msg1', timestamp: 0 })
+    store.addMessage({ id: 'm2', sender: 'kimi', text: 'msg2', timestamp: 0 })
+    store.addMessage({ id: 'm3', sender: 'user', text: 'hi', timestamp: 0 })
+
+    store.updateLastKimiMessage('updated', { id: 'm1' })
+    const msgs = useRadioStore.getState().messages
+    expect(msgs[0].text).toBe('updated')  // m1 changed
+    expect(msgs[1].text).toBe('msg2')      // m2 unchanged
+  })
+
+  it('不传 id 时走兜底：更新最后一条 kimi', () => {
+    const store = useRadioStore.getState()
+    store.addMessage({ sender: 'kimi', text: 'first', timestamp: 0 })
+    store.addMessage({ sender: 'user', text: 'hi', timestamp: 0 })
+    store.addMessage({ sender: 'kimi', text: 'last', timestamp: 0 })
+
+    store.updateLastKimiMessage('replaced')
+    const msgs = useRadioStore.getState().messages
+    expect(msgs[0].text).toBe('first')     // unchanged
+    expect(msgs[2].text).toBe('replaced')   // last kimi updated
+  })
+
+  it('id 不存在时静默跳过（不抛错，不改任何消息）', () => {
+    const store = useRadioStore.getState()
+    store.addMessage({ sender: 'kimi', text: 'only', timestamp: 0 })
+
+    store.updateLastKimiMessage('should not appear', { id: 'nonexistent' })
+    const msgs = useRadioStore.getState().messages
+    expect(msgs[0].text).toBe('only')
+    expect(msgs.length).toBe(1)
+  })
+})
+
+describe('addMessage (P2 外部 id)', () => {
+  beforeEach(() => {
+    useRadioStore.setState({ messages: [] })
+  })
+
+  it('传 id 时使用外部 id', () => {
+    useRadioStore.getState().addMessage({ id: 'ext-1', sender: 'kimi', text: 'hello', timestamp: 0 })
+    expect(useRadioStore.getState().messages[0].id).toBe('ext-1')
+  })
+
+  it('不传 id 时自动生成 uuid', () => {
+    useRadioStore.getState().addMessage({ sender: 'kimi', text: 'hello', timestamp: 0 })
+    const id = useRadioStore.getState().messages[0].id
+    expect(id).toBeTruthy()
+    expect(id.length).toBeGreaterThan(10)
+  })
+})

@@ -63,7 +63,7 @@ interface ChatSlice {
   pendingTtsText: string | null
   /** 换歌时要求停止当前 TTS 的信号（瞬态，page.tsx 消费后即 clear） */
   pendingTtsStop: boolean
-  addMessage: (msg: Omit<ChatMessage, 'id'>) => void
+  addMessage: (msg: Omit<ChatMessage, 'id'> & { id?: string }) => void
   /** 设置待 TTS 播报文本（换歌 transition 用） */
   setPendingTtsText: (text: string) => void
   /** 清除待播报信号（消费后调用） */
@@ -73,7 +73,10 @@ interface ChatSlice {
   /** 清除停止 TTS 信号 */
   clearPendingTtsStop: () => void
   /** 原地替换最后一条 kimi 消息（用于 pending→正式 reply 的平滑过渡，避免重复消息） */
-  updateLastKimiMessage: (text: string, extra?: Partial<Pick<ChatMessage, 'recommendations' | 'isPending'>>) => void
+  updateLastKimiMessage: (
+    text: string,
+    extra?: Partial<Pick<ChatMessage, 'recommendations' | 'isPending' | 'id'>>,
+  ) => void
   setSpeaking: (speaking: boolean) => void
   setAiCurrentTime: (t: number) => void
   setAiVoiceDuration: (t: number) => void
@@ -186,7 +189,7 @@ const createChatSlice: StateCreator<
   addMessage: (msg) =>
     set(
       (s) => ({
-        messages: [...s.messages, { ...msg, id: crypto.randomUUID() }],
+        messages: [...s.messages, { ...msg, id: msg.id ?? crypto.randomUUID() }],
       }),
       false,
       'chat/addMessage',
@@ -197,10 +200,17 @@ const createChatSlice: StateCreator<
   clearPendingTtsStop: () => set({ pendingTtsStop: false }, false, 'chat/clearPendingTtsStop'),
   updateLastKimiMessage: (text, extra) => {
     const s = get()
-    // 找到最后一条 kimi 消息，原地替换文本（保持 id 不变，避免 React key 跳变）
-    const lastKimiIdx = [...s.messages].reverse().findIndex((m) => m.sender === 'kimi')
-    if (lastKimiIdx === -1) return
-    const realIdx = s.messages.length - 1 - lastKimiIdx
+    let realIdx: number
+    if (extra?.id) {
+      // P2 防重入：按 pending id 精确匹配（不再用"最后一条 kimi"模糊查找）
+      realIdx = s.messages.findIndex((m) => m.id === extra.id)
+      if (realIdx === -1) return  // 消息已被清理，静默跳过
+    } else {
+      // 兜底：找最后一条 kimi（保留原行为，向后兼容）
+      const lastKimiIdx = [...s.messages].reverse().findIndex((m) => m.sender === 'kimi')
+      if (lastKimiIdx === -1) return
+      realIdx = s.messages.length - 1 - lastKimiIdx
+    }
     const updated = [...s.messages]
     updated[realIdx] = {
       ...updated[realIdx],
