@@ -2,6 +2,11 @@
 
 > 生成时间：2026-06-26
 > 用途：新会话快速接手 mimo-radio 项目当前状态
+>
+> **📌 2026-07-13 更新**：
+> - **P1 残留补完已完成**（`String(err)` + `req as any` 各 1 处清零，提交 `6ffe1aa`）—— §五 P1.2 第 4 项 + P2 第 9 项均 ✅
+> - **当前最新规格**：`docs/plans/2026-07-13-chat-antireentry-prompt-unify.md`（第 5 轮，chat 防重入 + prompt 统一，执行者 DSpro）
+> - **过时规格**（勿读）：`docs/plans/2026-07-05-next-steps-verified.md` + `docs/plans/2026-07-05-polish-round.md`（P1 已做，P2/P3 已重新规格化到 2026-07-13 版）
 
 ---
 
@@ -157,16 +162,16 @@
 1. **F4 isPlaying 仲裁层缺失**：8 个文件 13+ 写点直接调 setIsPlaying（原 16 处，MediaSession 删除后降为 13），无单点控制。当前靠 React 批处理兜底，**ASR 上线后触发概率上升**。建议引入 `playController` reducer 单点仲裁（见 `docs/reports/audit-2026-07-03-independent-Mavis.md` §3）。
 
 ### 🟠 P1（影响核心体验，应尽快做）
-2. **AI chat JSON 兜底 mood=userInput**（Mavis P1.1）：`mimo.ts:143` JSON 解析失败时 mood 兜底成完整用户输入 → 喂给 filterByMood 子串匹配 → 意外命中无关标签。**改法**：兜底用中性词（'随机'），复用 extractJsonObject。
-3. **`/chat` 无取消机制**（Mavis P1.4）：用户连发 3 条 → 3 个 fetch 同时飞 → updateLastKimiMessage 只更新最后一条 → 前两个 AI 回复**丢失但不告知**，token 已消耗。**改法**：AbortController + 按 pending message id 精确替换。
-4. **`String(err)` 漏改 13 处**（Mavis P1.2）：routes/index.ts/db 等 13 处 catch 用 `String(err)` 丢失堆栈。已有 `toErrorMeta` 但未复用。**改法**：机械替换为 `...toErrorMeta(err)`，极低成本。
-5. **AI prompt 样板重复 4 处**（Mavis P1.3）：personaBlock+tasteBlock+memoryBlock 在 intro/transition/chat/recommend 4 处独立拼接。改 persona 要改 4 处。**改法**：抽 `composeSystemPrompt(intent, extras)` 统一构造。
+2. ✅ **AI chat JSON 兜底 mood=userInput**（Mavis P1.1）：**已完成**。`mimo.ts:147` 兜底已改为 `mood: '随机'`。
+3. **`/chat` 无取消机制**（Mavis P1.4）：用户连发 3 条 → 3 个 fetch 同时飞 → updateLastKimiMessage 只更新最后一条 → 前两个 AI 回复**丢失但不告知**，token 已消耗。**改法**：AbortController + 按 pending message id 精确替换。**→ 见 `docs/plans/2026-07-13-chat-antireentry-prompt-unify.md` 序 1（待 DSpro 执行）**
+4. ✅ **`String(err)` 漏改 13 处**（Mavis P1.2）：**已完成**（2026-07-13，提交 `6ffe1aa`）。最后一处 `index.ts:236` uncaughtException 改为 `...toErrorMeta(err)`。grep 验证：业务代码 0 处 String(err)（只剩 logger.ts 自身实现，正常）。
+5. **AI prompt 样板重复 4 处**（Mavis P1.3）：personaBlock+tasteBlock+memoryBlock 在 intro/transition/chat/recommend 4 处独立拼接。改 persona 要改 4 处。**改法**：抽 `composeSystemPrompt(intent, extras)` 统一构造。**→ 见 `docs/plans/2026-07-13-chat-antireentry-prompt-unify.md` 序 2（待 DSpro 执行；recommend 不纳入统一，规划者已决策）**
 
 ### 🟡 P2（工程债，上线前批量做）
 6. **P2 安全与质量**：helmet CSP 未配、WCAG 颜色对比度未查、next/dynamic 代码分割未做、独立 ErrorBoundary 未做。
 7. **每次 chat 查 liked/disliked DB 4 次**（Mavis P2.1）：无缓存。**改法**：in-memory cache 30s TTL 或 session 开始时读一次。
 8. **reason 字段不喂 AI**（Mavis P3.5）：feedback 的 reason 只存 logger，不进 prompt。要么加 feedback→taste 链路，要么去掉字段（YAGNI）。
-9. **req as any 3 处**（Mavis P2.6）：sessionAuth/requestId/validate 用 `as any` 绕类型。**改法**：扩展 `types/express.d.ts`。
+9. ✅ **req as any 3 处**（Mavis P2.6）：**已完成**（2026-07-13，提交 `6ffe1aa`）。最后一处 `index.ts:94` 改为 `req.requestId`（types/express.d.ts 已声明）。grep 验证：业务代码 0 处 req as any。
 10. **addMessage O(n²)**（Mavis P2.2）：长会话性能劣化。低优先级。
 
 ### 🟢 低优先级 / 需外部环境
