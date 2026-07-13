@@ -91,7 +91,7 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 // Request logging with correlation ID
 app.use((req, res, next) => {
   const start = Date.now()
-  const reqId = (req as any).requestId || '-'
+  const reqId = req.requestId || '-'
   res.on('finish', () => {
     const duration = Date.now() - start
     logger.info(`${req.method} ${req.path}`, {
@@ -233,7 +233,7 @@ server.on('error', (err: Error & { code?: string }) => {
 // 全局兜底：未捕获的同步异常 / 未处理的 Promise 拒绝。
 // 记录日志后退出（不吞错），避免进程在异常状态下继续对外提供服务。
 process.on('uncaughtException', (err) => {
-  logger.error('uncaughtException, shutting down', { error: err.stack || String(err) })
+  logger.error('uncaughtException, shutting down', { ...toErrorMeta(err) })
   process.exit(1)
 })
 process.on('unhandledRejection', (reason) => {
