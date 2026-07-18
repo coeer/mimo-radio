@@ -176,7 +176,7 @@
 
 ### 🟢 低优先级 / 需外部环境
 11. `useAudioPlayer.sideffects.test.ts` 5 个既有 tsc 错误（Song 缺 emotionTags）。
-12. UPnP / 歌单导入端到端测试（依赖外部硬件/数据）。
+12. ~~UPnP~~ / 歌单导入端到端测试（依赖外部硬件/数据）。**UPnP 已下线（2026-07-18，P1-3：play() 是 stub 谎报成功 + 与 SSRF 私网拦截天然冲突）**，代码/依赖/路由注册已全部移除。
 13. ASR 语音输入需真实移动设备验证（MediaSession 已删除，见 `docs/plans/2026-07-05-remove-media-session.md`）。
 14. QQ 音源完整链路需 webbridge 开 y.qq.com tab。
 15. TTS mp3 不缓存（Mavis P2.5）、prompt 缓存（Mavis P2.3）——单用户应用低优先级。
@@ -237,7 +237,7 @@ document.body.innerText.match(/ON AIR|PLAYING/)  // 播放状态
 - ❌ 每日电台时间轴页面
 - ❌ WebSocket 实时推送
 - ❌ 用户品味长期记忆
-- ❌ UPnP 实测（功能存在，未端到端验证）
+- ❌ UPnP 实测 ~~（功能存在，未端到端验证）~~ **已下线（2026-07-18，P1-3）**
 
 ---
 

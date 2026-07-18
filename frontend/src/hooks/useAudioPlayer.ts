@@ -9,6 +9,10 @@ import { API_BASE, getApiHeaders } from '@/lib/config'
 export function useAudioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const timerRefs = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  // P1-2a（F2）：ref 存 setupAudio 返回的清理函数。
+  // effect cleanup 是同步的，等不到 async 分支里注册的监听——必须把 cleanup 存进 ref，
+  // 让同步 cleanup 能调到（QQ 延迟获取 playUrl 场景，原实现只设 cancelled=true，监听泄漏累积）。
+  const cleanupRef = useRef<(() => void) | null>(null)
   const { connect: connectAnalyser, getFrequencyData, resume: resumeAnalyser } = useAudioAnalyser()
 
   const currentSong = useRadioStore((state) => state.currentSong)
@@ -51,7 +55,12 @@ export function useAudioPlayer() {
 
     // 有 playUrl 直接用；无则（QQ 延迟获取）调接口拿
     if (currentSong.playUrl) {
-      return setupAudio(currentSong.playUrl)
+      cleanupRef.current = setupAudio(currentSong.playUrl)
+      return () => {
+        cancelled = true
+        cleanupRef.current?.()
+        cleanupRef.current = null
+      }
     } else {
       // QQ 音源：点播时通过 webbridge 桥接获取真实 URL
       ;(async () => {
@@ -77,13 +86,18 @@ export function useAudioPlayer() {
           if (!cancelled && data.url) {
             // 更新 store 的 playUrl
             useRadioStore.getState().setCurrentSong({ ...currentSong, playUrl: data.url })
-            setupAudio(data.url)
+            // P1-2a：cleanup 存 ref——同步 cleanup 才能清掉这里注册的监听
+            cleanupRef.current = setupAudio(data.url)
           }
         } catch (err) {
           logger.error('[Audio] play-url 接口失败', { error: err instanceof Error ? err.message : String(err) })
         }
       })()
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+        cleanupRef.current?.()   // P1-2a 关键：async 分支注册的监听也能被清掉
+        cleanupRef.current = null
+      }
     }
   }, [currentSong, nextSong, connectAnalyser])
 

@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { fetchWithTimeout } from '../utils/fetchWithTimeout'
+import { fetchWithTimeout, readBodySafely } from '../utils/fetchWithTimeout'
 import { logger } from '../utils/logger'
 import { loadPersona } from './djPersona'
 import * as fs from 'fs'
@@ -89,7 +89,8 @@ abstract class MimoTtsBase implements TtsEngine {
       throw new Error(`MiMo TTS error (${this.id}): ${err.slice(0, 200)}`)
     }
 
-    const json = (await res.json()) as {
+    // P1-1（B2）：body 读取显式加超时——TTS 返回大 base64，慢流可能挂死（fetchWithTimeout 只保到响应头）
+    const json = await readBodySafely(res, TTS_TIMEOUT) as {
       choices?: Array<{ message?: { audio?: { data?: string } } }>
     }
 

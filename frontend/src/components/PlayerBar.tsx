@@ -17,6 +17,12 @@ const PlayerBar = memo(function PlayerBar({ getFrequencyData }: { getFrequencyDa
     setLocalTime(useRadioStore.getState().currentTime)
   }, [])
 
+  // P1-2c（F5）：换歌时重置 localTime——原实现只在 mount 时 init（依赖 []），
+  // 换歌后从旧值继续 tick，时间滞留最多 5 秒（等 sync 校正）
+  useEffect(() => {
+    setLocalTime(useRadioStore.getState().currentTime)
+  }, [currentSong?.id])
+
   useEffect(() => {
     if (!isPlaying) return
     const tick = setInterval(() => {

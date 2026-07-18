@@ -133,4 +133,34 @@ describe('useAudioPlayer 副作用链路', () => {
       expect.objectContaining({ method: 'POST' })
     )
   })
+
+  // P1-2a（F2）：QQ async 分支注册的监听，换歌时必须被清掉（原实现只设 cancelled，监听累积）
+  it('QQ 延迟获取注册监听后换歌，监听不累积', async () => {
+    ;(globalThis as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ url: 'http://x/real.mp3' }),
+    })
+
+    renderHook(() => useAudioPlayer())
+    act(() => {
+      useRadioStore.setState({
+        currentSong: { id: 'qq1', title: 't', artist: 'a', emotionTags: [], sceneTags: [] },
+      })
+    })
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
+    // async 分支已注册监听（ended/timeupdate/loadedmetadata 各 1 份）
+    expect(lastAudio.listeners['ended']).toHaveLength(1)
+
+    // 换歌（带 playUrl）→ 旧 effect cleanup 应清掉 async 分支注册的监听，新 setup 只留 1 份
+    act(() => {
+      useRadioStore.setState({
+        currentSong: { id: '2', title: 't2', artist: 'a', playUrl: 'http://x/song2.mp3', emotionTags: [], sceneTags: [] },
+      })
+    })
+    expect(lastAudio.listeners['ended']).toHaveLength(1)
+    expect(lastAudio.listeners['timeupdate']).toHaveLength(1)
+    expect(lastAudio.listeners['loadedmetadata']).toHaveLength(1)
+  })
 })

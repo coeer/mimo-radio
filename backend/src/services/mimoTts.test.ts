@@ -15,6 +15,9 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn()
 vi.mock('../utils/fetchWithTimeout', () => ({
   fetchWithTimeout: (...args: unknown[]) => mockFetch(...args),
+  // P1-1：mimoTts 改用 readBodySafely 读 body——mock 里直通调用 reader，保持测试聚焦请求体
+  readBodySafely: (res: { json: () => Promise<unknown> }, _timeoutMs: number, reader?: (r: unknown) => Promise<unknown>) =>
+    reader ? reader(res) : res.json(),
 }))
 
 // Mock djPersona（voicedesign 会读 persona）

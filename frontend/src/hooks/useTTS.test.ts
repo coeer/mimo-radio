@@ -188,4 +188,67 @@ describe('useTTS', () => {
     // 第二次 speak 内部会 stop，应只产生新的播放
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  // P1-2b（F3）：AbortController 取消在途合成，防"旧串词复活"双音轨
+  describe('P1-2b TTS AbortController（F3）', () => {
+    it('fetch 带 AbortSignal', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ audio_url: '/x.mp3' }),
+      })
+      const { result } = renderHook(() => useTTS())
+      await act(async () => {
+        await result.current.speak('hello')
+      })
+      expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+    })
+
+    it('新 speak 取消上一个在途 fetch，旧请求静默返回 null 且不走兜底', async () => {
+      let firstSignal: AbortSignal | undefined
+      fetchMock.mockImplementationOnce((_url: string, opts: { signal: AbortSignal }) => {
+        firstSignal = opts.signal
+        // 模拟真实 fetch：abort 时 reject AbortError
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        })
+      })
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ audio_url: '/second.mp3' }),
+      })
+
+      const { result } = renderHook(() => useTTS())
+      let p1: Promise<'audio' | 'speech' | null>
+      act(() => {
+        p1 = result.current.speak('first') // 不 await——保持在途
+      })
+      await act(async () => {
+        await result.current.speak('second') // 应取消 first
+      })
+      let firstMode: string | null = 'init'
+      await act(async () => {
+        firstMode = await p1
+      })
+
+      expect(firstSignal?.aborted).toBe(true)
+      expect(firstMode).toBeNull() // AbortError 静默返回
+      expect(speechSynthesisMock.speak).not.toHaveBeenCalled() // 旧请求绝不走兜底（否则双音轨）
+    })
+
+    it('stop() 取消在途 fetch', async () => {
+      let signal: AbortSignal | undefined
+      fetchMock.mockImplementationOnce((_url: string, opts: { signal: AbortSignal }) => {
+        signal = opts.signal
+        return new Promise(() => { /* 挂起 */ })
+      })
+      const { result } = renderHook(() => useTTS())
+      act(() => {
+        result.current.speak('first')
+      })
+      act(() => {
+        result.current.stop()
+      })
+      expect(signal?.aborted).toBe(true)
+    })
+  })
 })

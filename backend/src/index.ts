@@ -22,7 +22,6 @@ import ttsEnginesRoutes from './routes/ttsEngines'
 import profileRoutes from './routes/profile'
 import importRoutes from './routes/import'
 import contextRoutes from './routes/context'
-import upnpRoutes from './routes/upnp'
 import scheduleRoutes from './routes/schedule'
 import qqmusicRoutes from './routes/qqmusic'
 import lyricRoutes from './routes/lyric'
@@ -143,6 +142,8 @@ app.use((req, res, next) => {
     if (!res.headersSent) {
       res.status(408).json({ success: false, error: { message: 'Request timeout', code: 'REQUEST_TIMEOUT' } })
     }
+    // P1-1：真正中止 socket，避免 handler 后续写响应抛 "headers already sent" / 连接悬挂
+    req.destroy()
   })
   next()
 })
@@ -159,7 +160,6 @@ app.use('/api/v1/tts-engines', ttsEnginesRoutes)
 app.use('/api/v1/profile', profileRoutes)
 app.use('/api/v1/import', importRoutes)
 app.use('/api/v1/context', contextRoutes)
-app.use('/api/v1/upnp', upnpRoutes)
 app.use('/api/v1/schedule', scheduleRoutes)
 app.use('/api/v1/qqmusic', qqmusicRoutes)
 app.use('/api/v1/lyric', lyricRoutes)

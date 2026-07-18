@@ -117,14 +117,24 @@ export async function fetchWithTimeout(
       signal: controller.signal,
     })
 
-    // Success: reset circuit on 2xx/3xx
-    if (res.ok || circuit.state === 'HALF_OPEN') {
+    // 2xx/3xx：重置熔断
+    if (res.ok) {
       if (circuit.failures > 0) {
         logger.info('Circuit breaker CLOSED', { host, previousFailures: circuit.failures })
       }
       circuit.state = 'CLOSED'
       circuit.failures = 0
+    } else if (res.status >= 500) {
+      // P1-1（B2）：5xx 计入熔断失败——上游持续 500 时熔断器必须能 OPEN，
+      // 原实现只在 catch（网络层错误）计数，HTTP 层 5xx 永远打不开熔断
+      circuit.failures++
+      circuit.lastFailureTime = Date.now()
+      if (circuit.failures >= DEFAULT_CIRCUIT_CONFIG.failureThreshold) {
+        circuit.state = 'OPEN'
+        logger.warn('Circuit breaker OPENED (upstream 5xx)', { host, failures: circuit.failures, status: res.status })
+      }
     }
+    // 4xx：不动熔断（客户端错误，不算上游故障）
 
     return res
   } catch (err) {
@@ -140,6 +150,35 @@ export async function fetchWithTimeout(
     throw err
   } finally {
     clearTimeout(timeoutId)
+  }
+}
+
+/**
+ * P1-1（B2）：带超时的 body 读取包装。
+ * fetchWithTimeout 的 AbortController 只覆盖到响应头（resolve 即 clearTimeout），
+ * 之后调方读 body（如 TTS 大 base64 慢流）无保护可挂死。
+ * 职责划分：fetchWithTimeout 管响应头，body 读取由调方用本函数显式加超时。
+ */
+export async function readBodySafely<T>(
+  res: Response,
+  timeoutMs: number,
+  reader: (res: Response) => Promise<T> = (r) => r.json() as Promise<T>,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      reader(res),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          // 取消底层流，避免连接悬挂；忽略 cancel 自身失败
+          res.body?.cancel().catch(() => { /* best effort */ })
+          reject(new Error(`Body read timeout after ${timeoutMs}ms`))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    // 铁律 1：timer 分配与清理成对出现在同一个 try/finally 里
+    if (timer) clearTimeout(timer)
   }
 }
 

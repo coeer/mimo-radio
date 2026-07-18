@@ -32,6 +32,9 @@ export function useTTS() {
   const synthStartRef = useRef(0)
   const synthDurationRef = useRef(0)
   const synthTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // P1-2b（F3）：取消在途 TTS 合成请求——复用 chat 防重入的 chatAbortRef 模式（提交 b32ad68）。
+  // 换歌时旧 transition 的 fetch resolve 后会 playAudio，造成双音轨叠加；AbortController 让旧请求静默终止。
+  const ttsAbortRef = useRef<AbortController | null>(null)
 
   const setHandlers = useCallback((h: TTSHandlers) => {
     handlersRef.current = h
@@ -50,6 +53,11 @@ export function useTTS() {
   }, [])
 
   const stop = useCallback(() => {
+    // P1-2b：stop 同时取消在途合成请求（否则旧 fetch resolve 后"复活"播放）
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort()
+      ttsAbortRef.current = null
+    }
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.src = ''
@@ -74,6 +82,10 @@ export function useTTS() {
       if (!text?.trim()) return null
       // 先停掉之前的
       stop()
+      // P1-2b：取消上一个在途的 tts fetch（防"旧串词复活"双音轨）
+      if (ttsAbortRef.current) ttsAbortRef.current.abort()
+      const controller = new AbortController()
+      ttsAbortRef.current = controller
 
       const handlers = handlersRef.current
       // 音色：优先用调用方传入的，否则用 store 持久化的
@@ -85,6 +97,7 @@ export function useTTS() {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({ text, voice }),
+          signal: controller.signal,
         })
       if (res.ok) {
         const data = await res.json()
@@ -96,6 +109,8 @@ export function useTTS() {
         }
       }
     } catch (err) {
+      // P1-2b：被新 speak/stop 主动取消 → 静默返回，不走 speechSynth 兜底（否则照样双音轨）
+      if (err instanceof DOMException && err.name === 'AbortError') return null
       // 落到兜底
       logger.warn('[TTS] /dj/tts failed, fallback to speechSynthesis', { error: err instanceof Error ? err.message : String(err) })
     }
