@@ -1,0 +1,280 @@
+---
+author: 规划者（ZCode）
+task: 规划者新会话快速恢复文档（项目状态 + 待办 + 关键决策）
+created: 2026-07-18
+purpose: 新会话进场时，ZCode 读这份 + AGENT.md 就能恢复 80% 工作状态
+update_rule: 每轮任务完成后更新；状态变化时立即更新
+---
+
+# ZCode 规划者快速恢复文档
+
+> **新会话使用方法**：把 `AGENT.md` + 本文件喂给 ZCode，它就能恢复当前项目状态、知道下一步做什么。
+>
+> **更新纪律**：每完成一轮任务、测试基线变化、新增约束、新增案例，立即更新本文件。这是新会话恢复的唯一入口——过时了就误导自己。
+
+---
+
+## 一、当前项目状态（2026-07-18 核实）
+
+### 1.1 测试基线（不可降级）
+
+| 层 | 文件数 | 测试数 | tsc |
+|----|--------|--------|-----|
+| 后端 | 33 | **277 passed** | 零错误 |
+| 前端 | 22 | **179 passed** | 零错误 |
+
+### 1.2 Git 状态
+
+- **分支**：master（trunk-based，直接 commit，不建分支）
+- **远程**：已 push 到 GitHub（`https://github.com/coeer/mimo-radio.git`）
+- **最新提交**：`d63bb63 docs: add execution report for chat anti-reentry + prompt unify`
+- **本地 vs 远程**：一致
+- **未跟踪**：`docs/KIMI/`（KIMI 工作空间 + 5 份产出）+ `docs/ZCode/`（本次新建）—— **新会话进场前必须先 commit**（否则新会话看不到这些文件）
+
+### 1.3 环境
+
+| 项 | 值 | 备注 |
+|----|-----|------|
+| 项目根 | `D:\Coder\mimo-radio` | |
+| 后端端口 | 8001 | `backend/` |
+| 前端端口 | **3000**（不是 3001）| start 脚本打印错了（B7 待修）|
+| webbridge | 127.0.0.1:10086 | daemon，uptime 长 |
+| workspace 指令 | `D:\Coder\AGENTS.md` | mimo-radio + ai-radio + 根级脚本 |
+
+---
+
+## 二、当前正在推进的任务
+
+### 2.1 大任务：基于 KIMI 2026-07-17 深度评审的修复整合方案
+
+**来源**：
+- `docs/KIMI/code-review-2026-07-17.md` —— KIMI 做的评审（14 个发现，全部属实）
+- `docs/KIMI/review-supplement-2026-07-17.md` —— ZCode 核实 + 4 点调整
+- `docs/KIMI/fix-plan-integrated-2026-07-17.md` —— **整合方案（执行依据）**
+
+### 2.2 四阶段进度
+
+| 阶段 | 内容 | 执行者 | 状态 |
+|------|------|--------|------|
+| **P0a** | 5 项机械清理（helmet 测试同步 / 端口口径 / F4 全屏 seek / aiLimiter 拆挂载 / 死代码清理）| **ZCode 自做** | ⏸ **未开始**（开新会话第一件事）|
+| **P0b** | 4 项（R1 body 上限 / R2 鉴权 fail-closed / F1 收藏反向 / B6 tasteCache 分 key）| KIMI | ⏸ 未开始 |
+| **P1** | 4 项（B2 fetchWithTimeout / F2 监听泄漏 / F3 TTS AbortController / F5 PlayerBar 重置）| KIMI | ⏸ 未开始 |
+| **P2** | 仓库卫生（tsconfig exclude / .gitignore / git rm 构建产物 / UPnP 下线 / 文档更新）| 任意 | ⏸ 未开始 |
+
+### 2.3 4 点调整（KIMI 原方案 vs ZCode 整合方案的冲突仲裁）
+
+KIMI 原方案 vs ZCode 整合方案冲突时，**以整合方案为准**：
+
+1. **R2 鉴权方向反过来** —— 不是"非 dev 拒绝启动"，是"显式配 `NODE_ENV=production` 才严格，没配就警告但能跑"。理由：单人开发项目，忘配环境变量起不来体验极差。
+2. **F4 全屏进度条 seek 提到 P0** —— 核心交互损坏，不是 P1。
+3. **P0-3 修收藏要顺手改误导性注释** —— `KimiCard.tsx:121` 的"F1 已修复"注释只解决了一半（re-render），闭包陈旧还在。
+4. **UPnP 下线连带清理入口注册** —— 铁律 6，删 `index.ts:156` 路由注册 + import + package.json 依赖 + 文档引用。
+
+---
+
+## 三、关键决策（不可违反）
+
+### 3.1 sessionToken（HANDOVER §四 决策 1-3）
+
+- 格式：`sessionId.sig`（HMAC-SHA256）
+- **不持久化**到 localStorage（partialize 只存 `djEnabled/currentModel/ttsVoice`）
+- 不过期（开发期便利，上线前再加）
+- queue/currentSong/sessionId/sessionToken 都不持久化（内存态）
+
+### 3.2 安全
+
+- **SSRF 白名单**含 `127.0.0.1`/`localhost`（webbridge daemon 是合法本地调用，只放行 10086 端口）
+- **dev 模式 API 认证放行**（没配 API_KEY 时，auth.ts 的 dev 便利性，生产 fail-fast —— 但 R2 待修，当前是 fail-open）
+- **Fish Audio / 飞书已删除**（代码 + 文档 + 构建产物全清）
+
+### 3.3 AI/DJ
+
+- **DJ 串词字数**：intro / transition / chat 三入口统一 **60-120 字**
+- **搜索前置架构**（Bug 2 修复）：extractIntent → 搜索 → 真实结果喂 AI → newSong = 搜索结果[0]
+- **DJ 三层记忆**：persona（personaPromptBlock）+ 短期（djMemory.ts）+ 长期（feedback → tasteCache → 搜索加权）
+- **chat 防重入**（DSpro 2026-07-13 完成）：AbortController + 按 pendingId 精确替换
+
+### 3.4 前端架构
+
+- **进度条/歌词 memo 子组件**：ProgressBar / LyricDisplay 抽离，隔离 currentTime（4Hz）订阅，避免重渲染风暴
+- **isTransitioning 防重入**：换歌时"换台中..."反馈 + 4 入口统一守卫
+- **主题切换 ref 模式**：`prevThemeRef = useRef` + cleanup 里 `setTheme(prevThemeRef.current)`，避免闭包陈旧（DSflash 曾经踩过回归坑）
+
+### 3.5 协作
+
+- **trunk-based Git**：直接 commit master，conventional commits，push 前 tsc+vitest 必跑
+- **双规划者**：ZCode（原任，COLLABORATION.md 维护者）+ KIMI（双身份），僵持找用户
+- **报告 6 节**：摘要 / 改动明细 / 验证 / 偏差说明 / 自评 / 铁律回顾
+- **署名三要素**：文件名 `-<代号>` + 头部 `author: <代号>` + 尾部 `*报告由 <代号> 生成。*（ZCode 作为默认规划者不带后缀）
+
+---
+
+## 四、诊断陷阱（HANDOVER §六，别重蹈）
+
+### ❌ 陷阱 1：用 localStorage 读 zustand store
+
+```js
+// 错！partialize 不存的字段永远读不到
+JSON.parse(localStorage.getItem('mimo-radio-store')).state.queue  // 永远 []
+```
+
+**正确**：用 DOM 反映真实渲染，或 `useRadioStore.getState()` 在组件内读内存值。
+
+### ❌ 陷阱 2：后台启动后端 + 改代码不重启
+
+tsx watch 的热重载在 stdout 重定向到文件时失效。改后端代码后**必须手动重启**（杀 8001 端口进程）。
+
+### ❌ 陷阱 3：把单用户本地应用当高并发服务设计
+
+不引入 Redis/锁/复杂并发控制。tasteCache 用 30s TTL 内存缓存就够了。
+
+### ❌ 陷阱 4：git push 前不跑测试
+
+push 前必跑：`cd backend && npm test && npx tsc --noEmit` + `cd frontend && npm test && npx tsc --noEmit`
+
+### ❌ 陷阱 5：硬编码 webm 却后端只收 wav/mp3
+
+改一端必须查另一端的 schema（dj.ts asrSchema 的 enum）。
+
+---
+
+## 五、六铁律 + 12 个案例（COLLABORATION §10.3 + §10.6 摘要）
+
+### 5.1 六铁律
+
+1. 资源分配与清理必须成对出现在同一个 try/finally 里
+2. 不要用复制粘贴做重试，用循环
+3. 写完异步逻辑，问自己三个问题（资源释放？错误处理？取消机制？）
+4. 替换已验证的修复方案前，必须理解原方案为什么这么写
+5. 性能类改动必须附 Profiler 实测证据（不接受"待实测"）
+6. 删除功能时必须 grep 全项目（含 .md 文档）
+
+### 5.2 案例索引（前人踩过的坑，派活时附相关教训）
+
+| 案例 | 教训 |
+|------|------|
+| ASR 格式契约不一致 | 改一端必须查另一端 schema |
+| handleLike 双重否定 | 写 `!` 前推演 toggle 后状态 |
+| 无限轮询 | 异步流程必须列出所有终态 |
+| 定时器泄漏 | 复制粘贴是抽象信号，用循环 |
+| AIService 接口违反 | TS 实现可比接口多可选参数，不要"觉得报错就改" |
+| FullscreenPlayer 闭包回归 | `[]` 依赖下闭包捕获初始值；ref 读 DOM 是同步的，state 是异步的 |
+| E2E 全标"待实测" | "待实测"不是验证是拖延；跑一次 E2E 就能抓到回归 |
+| 性能改动无 Profiler | 性能优化不看 Profiler 等于没验证 |
+| F4 isPlaying 升级 P0 | "暂缓"的技术债触发条件变化时要重新评估 |
+| JSON 兜底 mood=userInput | catch 兜底返回值不能用用户原始输入 |
+| String(err) 13 处漏改 | 新工具引入后要 grep 全仓确认无残留旧写法 |
+| chat 无取消 + 连发丢回复 | 异步 fetch + last-write-wins = 连发静默丢失 |
+| 删 MediaSession 只删代码不删文档 | **代码零残留 ≠ 功能零残留**（铁律 6 的来源）|
+
+完整版见 `COLLABORATION.md §10.6`。
+
+---
+
+## 六、已有执行者与最近产出
+
+| 执行者 | 身份 | 最近产出 | ZCode 评价 |
+|--------|------|---------|-----------|
+| **DSpro** | 执行者 | chat 防重入 + composeSystemPrompt（2026-07-13）| A，零偏差 |
+| **DSflash** | 执行者 | MediaSession 删除（2026-07-05）| B+，闭包回归教训 |
+| **MiNiMax** | 执行者 | Context7 文档审计（2026-07-11）| A+，4 份子报告 |
+| **KIMI** | **双身份** | code-review-2026-07-17 + fix-plan-2026-07-17 | A，14 发现全属实 |
+
+KIMI 的对齐文档：`docs/KIMI/alignment-2026-07-18.md`（双身份协议，ZCode 也是签约方）。
+
+---
+
+## 七、下一步行动（新会话进场后的优先级）
+
+### 🔴 第一优先：commit 当前未跟踪文件
+
+```bash
+cd D:/Coder/mimo-radio
+git add docs/KIMI/ docs/ZCode/
+git commit -m "docs: KIMI 双身份对齐 + ZCode 规划者身份卡 + 整合修复方案"
+git push origin master
+```
+
+**理由**：新会话的 ZCode 看不到未跟踪文件，必须先入库。
+
+### 🟠 第二优先：ZCode 自做 P0a（5 项机械清理）
+
+见 `docs/KIMI/fix-plan-integrated-2026-07-17.md` §P0a：
+- P0a-1：helmet 测试同步（B5，我上次留下的债）
+- P0a-2：端口口径统一（B7 / C1）
+- P0a-3：F4 全屏进度条 seek（4 处改动）
+- P0a-4：aiLimiter 拆挂载（B1，抽到共享模块）
+- P0a-5：死代码清理（TtsEngineSwitcher / MarkdownText）
+
+每项做完跑 tsc + vitest，全部做完一次性 commit。
+
+### 🟡 第三优先：派 KIMI 执行 P0b + P1
+
+P0a 完成后，告诉用户：
+> "P0a 做完了，commit xxx。现在让 KIMI 执行 P0b，把 docs/KIMI/fix-plan-integrated-2026-07-17.md 的 P0b 部分（4 项）派给它。"
+
+用户会用 `docs/KIMI/prompt-dual-role-2026-07-18.md` 里的标准话术派活。
+
+### 🟢 第四优先：审查 KIMI 的 P0b 报告
+
+KIMI 做完后，用户会说"检查 docs/KIMI/reports/exec-p0b-...-KIMI.md"。按审查 DSpro 的标准逐项核实 + 打分 + 前科提醒。
+
+---
+
+## 八、必读文档清单（新会话喂给 ZCode）
+
+### 8.1 最小恢复集（80% 状态）
+
+1. `docs/ZCode/AGENT.md`（身份）
+2. `docs/ZCode/planner-bootstrap.md`（本文件，状态 + 待办）
+
+### 8.2 完整恢复集（100% 状态）
+
+1. `docs/ZCode/AGENT.md`
+2. `docs/ZCode/planner-bootstrap.md`（本文件）
+3. `D:\Coder\mimo-radio\COLLABORATION.md`（主契约）
+4. `D:\Coder\mimo-radio\HANDOVER.md`（历史决策）
+5. `docs/KIMI/alignment-2026-07-18.md`（双身份协议）
+6. `docs/KIMI/fix-plan-integrated-2026-07-17.md`（当前任务）
+
+### 8.3 给新会话的进场提示词（用户复制粘贴用）
+
+```
+你是 mimo-radio 项目的规划者 ZCode，原任，COLLABORATION.md 维护者。新会话开始，你需要快速恢复上下文。
+
+项目根：D:\Coder\mimo-radio
+
+请按顺序读这 6 份文件：
+1. docs/ZCode/AGENT.md —— 你的身份卡
+2. docs/ZCode/planner-bootstrap.md —— 当前项目状态 + 待办（最重要）
+3. COLLABORATION.md —— 主契约（§十.3 六铁律 + §十.6 案例 + §十一署名）
+4. HANDOVER.md —— 历史决策、诊断陷阱
+5. docs/KIMI/alignment-2026-07-18.md —— 双身份协议（你和 KIMI 的协作矩阵）
+6. docs/KIMI/fix-plan-integrated-2026-07-17.md —— 当前整合修复方案
+
+读完后告诉我：
+- 当前测试基线是多少
+- 下一步该做什么（按 planner-bootstrap §七 的优先级）
+- 你打算怎么推进
+
+然后等用户确认再动手。
+```
+
+---
+
+## 九、本文件更新日志
+
+| 日期 | 更新内容 | 更新者 |
+|------|---------|--------|
+| 2026-07-18 | 初版创建（KIMI 评审整合方案 + 双身份协议 + 身份卡体系）| ZCode |
+
+**下次需要更新的触发条件**：
+- 每完成一轮任务（P0a / P0b / P1 / P2 任一阶段）
+- 测试基线变化（新增测试、修复 bug 后）
+- 新增案例到 COLLABORATION §10.6
+- 新增约束或决策
+- 执行者身份变化（新增/离开）
+
+---
+
+*本文件是 ZCode 规划者新会话恢复的唯一入口。过时了就误导自己——状态变化时立即更新。*
