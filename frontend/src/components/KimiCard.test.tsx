@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import KimiCard from './KimiCard'
 import { useRadioStore } from '@/store/radioStore'
@@ -81,5 +81,56 @@ describe('KimiCard', () => {
   it('应显示当前播放时间', () => {
     render(<KimiCard />)
     expect(screen.getByText(/0:30/)).toBeInTheDocument()
+  })
+
+  // P0b-3 / F1：上报的 action 必须与切换后的最新状态一致（闭包陈旧曾导致 action 反向）
+  describe('F1 收藏上报 action（P0b-3）', () => {
+    let fetchMock: ReturnType<typeof vi.fn>
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      fetchMock = vi.fn().mockResolvedValue({ ok: true })
+      vi.stubGlobal('fetch', fetchMock)
+      useRadioStore.setState({ sessionId: 'sess-1', sessionToken: 'tok-1' })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+      useRadioStore.setState({ sessionId: null, sessionToken: null })
+    })
+
+    it('收藏 → 上报 action=like', () => {
+      render(<KimiCard />)
+      fireEvent.click(screen.getByRole('button', { name: '收藏' }))
+      vi.advanceTimersByTime(600)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      expect(body.action).toBe('like')
+      expect(body.session_token).toBe('tok-1')
+    })
+
+    it('取消收藏 → 上报 action=unlike', () => {
+      useRadioStore.setState({ likedSongIds: ['s1'] })
+      render(<KimiCard />)
+      fireEvent.click(screen.getByRole('button', { name: '收藏' }))
+      vi.advanceTimersByTime(600)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      expect(body.action).toBe('unlike')
+    })
+
+    it('debounce 内快速连点 → 只发最后一次，action 与最终状态一致', () => {
+      render(<KimiCard />)
+      const btn = screen.getByRole('button', { name: '收藏' })
+      fireEvent.click(btn) // like
+      fireEvent.click(btn) // unlike
+      fireEvent.click(btn) // like（最终状态）
+      vi.advanceTimersByTime(600)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      expect(body.action).toBe('like')
+      expect(useRadioStore.getState().likedSongIds).toContain('s1')
+    })
   })
 })

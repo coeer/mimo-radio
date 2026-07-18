@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { signSession, verifySessionToken } from './sessionToken'
 
 describe('sessionToken', () => {
@@ -91,6 +91,49 @@ describe('sessionToken', () => {
         expect(result.valid).toBe(true)
         if (result.valid) expect(result.sessionId).toBe(id)
       }
+    })
+  })
+
+  // P0b-2：production 下拒绝用公开 fallback 密钥（import 时 fail-fast）
+  describe('getSecret production guard (P0b-2)', () => {
+    const ENV_KEYS = ['NODE_ENV', 'SESSION_SECRET', 'API_KEY'] as const
+
+    async function importWithEnv(env: Record<string, string | undefined>) {
+      vi.resetModules()
+      const saved: Record<string, string | undefined> = {}
+      try {
+        for (const k of ENV_KEYS) {
+          saved[k] = process.env[k]
+          if (env[k] === undefined) delete process.env[k]
+          else process.env[k] = env[k]
+        }
+        return await import('./sessionToken')
+      } finally {
+        // 铁律 1：环境变量修改与恢复成对出现在同一个 try/finally 里
+        for (const k of ENV_KEYS) {
+          if (saved[k] === undefined) delete process.env[k]
+          else process.env[k] = saved[k]
+        }
+        vi.resetModules()
+      }
+    }
+
+    it('production + 无 SESSION_SECRET/API_KEY → import 抛错（fail-closed）', async () => {
+      await expect(
+        importWithEnv({ NODE_ENV: 'production', SESSION_SECRET: undefined, API_KEY: undefined })
+      ).rejects.toThrow(/Production requires SESSION_SECRET or API_KEY/)
+    })
+
+    it('production + 有 SESSION_SECRET → 正常签名', async () => {
+      const mod = await importWithEnv({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), API_KEY: undefined })
+      const token = mod.signSession('prod-session')
+      expect(mod.verifySessionToken(token).valid).toBe(true)
+    })
+
+    it('非 production + 无 secret → 放行（dev 便利，可签名）', async () => {
+      const mod = await importWithEnv({ NODE_ENV: 'development', SESSION_SECRET: undefined, API_KEY: undefined })
+      const token = mod.signSession('dev-session')
+      expect(mod.verifySessionToken(token).valid).toBe(true)
     })
   })
 })

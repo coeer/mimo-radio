@@ -170,6 +170,19 @@ app.use(errorHandler)
 
 // Initialize database and validate secrets BEFORE starting the server
 assertSecretConfigured()
+
+// P0b-2（R2 鉴权 fail-closed）：显式 production 才严格，没配就警告但能跑（单人开发项目，忘配不应起不来）
+if (!config.apiKey && config.nodeEnv === 'production') {
+  // production 下 auth 中间件会对每个请求 500，属于误配置，启动直接 fail-fast
+  throw new Error('FATAL: NODE_ENV=production requires API_KEY to be set.')
+}
+if (!config.apiKey) {
+  logger.warn('⚠️  API_KEY not set and NODE_ENV != production — authentication is DISABLED. Safe for local dev only.')
+}
+if (!config.sessionSecret && !config.apiKey) {
+  logger.warn('[DEV] using fallback session secret')
+}
+
 initDb()
 
 // 启动时加载 DJ 人设（若有）

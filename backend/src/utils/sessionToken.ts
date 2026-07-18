@@ -17,7 +17,23 @@ export function assertSecretConfigured(): void {
   }
 }
 
-const SECRET = config.sessionSecret || config.apiKey || DEV_FALLBACK_SECRET
+// P0b-2（R2 鉴权 fail-closed，方向：显式 production 才严格，没配就警告但能跑）：
+// production 下绝不允许用公开 fallback 密钥签名——import 时直接抛错（fail-fast）；
+// 非 production 可用 fallback，启动警告在 index.ts（[DEV] using fallback session secret）。
+function getSecret(): string {
+  if (config.nodeEnv === 'production') {
+    if (!config.sessionSecret && !config.apiKey) {
+      throw new Error(
+        'FATAL: Production requires SESSION_SECRET or API_KEY (≥32 chars). ' +
+        'Refusing to sign sessions with a public fallback secret.'
+      )
+    }
+    return config.sessionSecret || config.apiKey!
+  }
+  return config.sessionSecret || config.apiKey || DEV_FALLBACK_SECRET
+}
+
+const SECRET = getSecret()
 
 /**
  * Sign a session ID with HMAC-SHA256 to prevent session enumeration attacks.

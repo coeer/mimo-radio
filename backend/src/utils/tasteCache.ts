@@ -24,41 +24,45 @@ interface CacheEntry<T> {
 const TTL_MS = 30 * 1000 // 30s
 
 class TasteCache {
-  private likedArtists: CacheEntry<ArtistTaste> | null = null
-  private dislikedArtists: CacheEntry<ArtistTaste> | null = null
+  // P0b-4（B6）：key = `liked:${limit}` / `disliked:${limit}`。
+  // 原单槽缓存的 bug：radio.ts:222 用 limit=3、radio.ts:354 用 limit=5，30s 内先到先得，
+  // 后到的 limit 命中前一个的缓存，limit 语义丢失（隐藏的数据正确性 bug）。
+  private cache = new Map<string, CacheEntry<ArtistTaste>>()
 
-  private isExpired<T>(entry: CacheEntry<T> | null): boolean {
+  private isExpired<T>(entry: CacheEntry<T> | null | undefined): boolean {
     return !entry || entry.expiresAt < Date.now()
   }
 
   /** 取 liked artists；limit 与 db 层默认 5 对齐 */
   async getLikedArtists(limit = 5): Promise<ArtistTaste> {
-    if (this.isExpired(this.likedArtists)) {
-      this.likedArtists = {
+    const key = `liked:${limit}`
+    const entry = this.cache.get(key)
+    if (this.isExpired(entry)) {
+      this.cache.set(key, {
         value: getLikedArtists(limit),
         expiresAt: Date.now() + TTL_MS,
-      }
+      })
     }
-    // 此分支里 this.likedArtists 已被重新赋值，TS 跨过 if 边界仍报 null
-    // 用非空断言兜底（isExpired(true) 路径已保证赋值）
-    return this.likedArtists!.value
+    // isExpired(false) 路径已保证 set 执行，非空断言兜底
+    return this.cache.get(key)!.value
   }
 
   /** 取 disliked artists；limit 与 db 层默认 3 对齐 */
   async getDislikedArtists(limit = 3): Promise<ArtistTaste> {
-    if (this.isExpired(this.dislikedArtists)) {
-      this.dislikedArtists = {
+    const key = `disliked:${limit}`
+    const entry = this.cache.get(key)
+    if (this.isExpired(entry)) {
+      this.cache.set(key, {
         value: getDislikedArtists(limit),
         expiresAt: Date.now() + TTL_MS,
-      }
+      })
     }
-    return this.dislikedArtists!.value
+    return this.cache.get(key)!.value
   }
 
   /** 立即清空所有缓存 —— 在 saveFeedback 写入后调用 */
   invalidate(): void {
-    this.likedArtists = null
-    this.dislikedArtists = null
+    this.cache.clear()
   }
 }
 

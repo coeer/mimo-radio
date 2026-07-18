@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // 关键：mock ../db（必须在 import 之前）
-const mockGetLikedArtists = vi.fn(() => [
-  { artist: '周杰伦', count: 3 },
-  { artist: '陈奕迅', count: 1 },
-])
-const mockGetDislikedArtists = vi.fn(() => [
-  { artist: '许嵩', count: 2 },
-])
+// mock 按 limit 截断返回，让不同 limit 的结果可区分（P0b-4 分 key 验证需要）
+const mockGetLikedArtists = vi.fn((limit = 5) =>
+  [
+    { artist: '周杰伦', count: 3 },
+    { artist: '陈奕迅', count: 1 },
+    { artist: '林俊杰', count: 2 },
+    { artist: '邓紫棋', count: 1 },
+    { artist: '薛之谦', count: 1 },
+  ].slice(0, limit)
+)
+const mockGetDislikedArtists = vi.fn((limit = 3) =>
+  [
+    { artist: '许嵩', count: 2 },
+    { artist: '汪苏泷', count: 1 },
+    { artist: '徐良', count: 1 },
+  ].slice(0, limit)
+)
 
 vi.mock('../db', () => ({
   getLikedArtists: (...args: unknown[]) => (mockGetLikedArtists as (...a: unknown[]) => unknown)(...args),
@@ -28,14 +38,13 @@ describe('tasteCache', () => {
   })
 
   describe('cache hit', () => {
-    it('首次 getLikedArtists 触发 1 次 db 调用；第二次同会话直接走缓存', async () => {
+    it('首次 getLikedArtists 触发 1 次 db 调用；同 limit 第二次直接走缓存', async () => {
       const first = await tasteCache.getLikedArtists(3)
       const second = await tasteCache.getLikedArtists(3)
-      const third = await tasteCache.getLikedArtists(5)
 
       expect(first).toEqual(second)
-      expect(first).toEqual(third) // 内容是同一个数组（limit 仅影响 db 层 → 这里相等因为都无截断差异）
-      // 30s 内 db 函数只被调 1 次
+      expect(first).toHaveLength(3)
+      // 30s 内同 key db 函数只被调 1 次
       expect(mockGetLikedArtists).toHaveBeenCalledTimes(1)
     })
 
@@ -108,21 +117,35 @@ describe('tasteCache', () => {
     })
   })
 
-  describe('不同 limit 仅在缓存 miss 时影响 db 调用', () => {
-    it('缓存命中时无论传什么 limit 都返回同一份缓存值', async () => {
-      mockGetLikedArtists.mockReturnValueOnce([
-        { artist: 'A', count: 5 },
-        { artist: 'B', count: 3 },
-        { artist: 'C', count: 1 },
-      ])
-      const first = await tasteCache.getLikedArtists(3) // limit=3 取 3 个
-      // 第二次 limit=2 但缓存的是数组引用（db 层 limit 由调用方决定，cache 拿到的是数组本身）
-      const second = await tasteCache.getLikedArtists(2)
-      // 我们的 cache 是直接缓存 db 的返回值，不依赖 limit，因此 limit 不会自动截断
-      // 这是已知设计：limit 仅控制 db 第一次查询的截断；之后从缓存返回。
-      expect(first).toBe(second)
-      expect(mockGetLikedArtists).toHaveBeenCalledTimes(1)
-      expect(mockGetLikedArtists).toHaveBeenCalledWith(3)
+  describe('不同 limit 不互相污染（P0b-4 / B6）', () => {
+    it('30s 内先调 limit=3 再调 limit=5，各自独立查 db，limit 语义不丢失', async () => {
+      const three = await tasteCache.getLikedArtists(3)
+      const five = await tasteCache.getLikedArtists(5)
+
+      // 原单槽 bug：limit=5 会命中 limit=3 的缓存（返回 3 个）
+      expect(three).toHaveLength(3)
+      expect(five).toHaveLength(5)
+      expect(mockGetLikedArtists).toHaveBeenCalledTimes(2)
+      expect(mockGetLikedArtists).toHaveBeenNthCalledWith(1, 3)
+      expect(mockGetLikedArtists).toHaveBeenNthCalledWith(2, 5)
+    })
+
+    it('同 limit 重复调用仍走缓存（分 key 不破坏缓存收益）', async () => {
+      await tasteCache.getLikedArtists(3)
+      await tasteCache.getLikedArtists(5)
+      await tasteCache.getLikedArtists(3)
+      await tasteCache.getLikedArtists(5)
+
+      expect(mockGetLikedArtists).toHaveBeenCalledTimes(2)
+    })
+
+    it('disliked 同样按 limit 分 key', async () => {
+      const two = await tasteCache.getDislikedArtists(2)
+      const three = await tasteCache.getDislikedArtists(3)
+
+      expect(two).toHaveLength(2)
+      expect(three).toHaveLength(3)
+      expect(mockGetDislikedArtists).toHaveBeenCalledTimes(2)
     })
   })
 })

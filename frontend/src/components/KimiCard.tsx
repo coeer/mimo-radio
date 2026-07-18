@@ -118,7 +118,10 @@ const KimiCard = memo(function KimiCard({ onSeek, getFrequencyData }: { onSeek?:
   const nextSong = useRadioStore((state) => state.nextSong)
   const prevSong = useRadioStore((state) => state.prevSong)
   const toggleLike = useRadioStore((state) => state.toggleLike)
-  // F1 修复：订阅 likedSongIds 数组（触发 re-render）而非 isLiked 函数引用
+  // 订阅 likedSongIds 触发 re-render（UI 即时更新爱心状态）。
+  // 注意：handleLike 上报时不能读本闭包的 likedSongIds（toggleLike 同步更新 store，
+  // 但本渲染闭包里的数组还是旧值——读它会得到切换前的状态，action 恰好反向），
+  // 必须用 useRadioStore.getState() 读最新值。见 handleLike（P0b-3 / F1 真正修复）。
   const likedSongIds = useRadioStore((state) => state.likedSongIds)
   const isSongLiked = (id: string) => likedSongIds.includes(id)
   const sessionId = useRadioStore((state) => state.sessionId)
@@ -130,7 +133,10 @@ const KimiCard = memo(function KimiCard({ onSeek, getFrequencyData }: { onSeek?:
   const handleLike = useCallback(() => {
     if (!currentSong) return
     toggleLike(currentSong.id)
-    const liked = isSongLiked(currentSong.id) // toggleLike 已执行，isSongLiked 返回切换后的值
+    // F1 真正修复（P0b-3）：toggleLike 同步更新 store，但本闭包的 likedSongIds 还是
+    // 本次渲染的旧值——用它判断会让上报 action 恰好反向（长期污染品味数据）。
+    // 用 getState() 读切换后的最新值（同 chat 防重入 pendingId 的 getState 模式，提交 b32ad68）。
+    const likedNow = useRadioStore.getState().likedSongIds.includes(currentSong.id)
     // 本地立即响应，上报 debounce 500ms
     if (likeDebounceRef.current) clearTimeout(likeDebounceRef.current)
     likeDebounceRef.current = setTimeout(() => {
@@ -140,12 +146,12 @@ const KimiCard = memo(function KimiCard({ onSeek, getFrequencyData }: { onSeek?:
           headers: { ...getApiHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_token: sessionToken,
-            action: liked ? 'like' : 'unlike',
+            action: likedNow ? 'like' : 'unlike',
           }),
         }).catch(() => { /* 静默失败，不影响交互 */ })
       }
     }, 500)
-  }, [currentSong, isSongLiked, toggleLike, sessionId, sessionToken])
+  }, [currentSong, toggleLike, sessionId, sessionToken])
   const volume = useRadioStore((state) => state.volume)
   const setVolume = useRadioStore((state) => state.setVolume)
   const [showVol, setShowVol] = useState(false)
