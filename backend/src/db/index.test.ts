@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   initDb,
-  getSongs,
-  setSongs,
   getSession,
   setSession,
   getProfile,
@@ -13,22 +11,11 @@ import {
   getLikedArtists,
   getDislikedArtists,
 } from './index'
-import type { RadioSession, Song, UserProfile } from '../types'
+import type { RadioSession, UserProfile } from '../types'
 
 describe('db', () => {
   beforeEach(() => {
     initDb()
-    setSongs([])
-  })
-
-  describe('songs', () => {
-    it('should get and set songs', () => {
-      const songs: Song[] = [
-        { id: '1', title: 'Test', artist: 'Artist', emotionTags: ['a'], sceneTags: ['b'] },
-      ]
-      setSongs(songs)
-      expect(getSongs()).toEqual(songs)
-    })
   })
 
   describe('sessions', () => {

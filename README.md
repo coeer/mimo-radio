@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss" />
   <img src="https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite" />
   <img src="https://img.shields.io/badge/AI-MiMo_v2.5-orange" />
-  <img src="https://img.shields.io/badge/test-251%2F127_passed-success?logo=vitest" />
+  <img src="https://img.shields.io/badge/test-288%2F189_passed-success?logo=vitest" />
 </p>
 
 AI DJ 电台。你说一句话，它帮你选歌、解说、陪伴。
@@ -47,8 +47,8 @@ SESSION_SECRET=随机字符串至少32字符
 测试：
 
 ```bash
-cd backend  && npm test    # 251 tests
-cd frontend && npm test    # 127 tests
+cd backend  && npm test    # 288 tests
+cd frontend && npm test    # 189 tests
 ```
 
 ---

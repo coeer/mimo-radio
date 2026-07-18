@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint src"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
@@ -29,7 +30,6 @@
     "@types/node": "^20.11.30",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^9.0.8",
-    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",
     "@vitest/coverage-v8": "^4.1.7",

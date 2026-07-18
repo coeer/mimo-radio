@@ -34,8 +34,8 @@ export const config = {
   openWeatherLat: parseFloat(process.env.OPENWEATHER_LAT || '39.9042'),
   openWeatherLon: parseFloat(process.env.OPENWEATHER_LON || '116.4074'),
 
-  // Netease
-  neteaseCookie: process.env.NETEASE_COOKIE || '',
+  // webbridge daemon（QQ 音源桥接，P2-2：收进 config，不再直读 process.env）
+  webbridgeUrl: process.env.WEBBRIDGE_URL || 'http://127.0.0.1:10086',
 
   // Server base URL (for generating absolute audio URLs)
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8001',

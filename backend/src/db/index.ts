@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { join } from 'path'
 import { mkdirSync, existsSync } from 'fs'
-import { Song, RadioSession, UserProfile } from '../types'
+import { RadioSession, UserProfile } from '../types'
 import { logger, toErrorMeta } from '../utils/logger'
 
 const DATA_DIR = join(__dirname, '../../data')
@@ -178,24 +178,6 @@ export function getDislikedArtists(limit = 3): Array<{ artist: string; count: nu
   } catch {
     return []
   }
-}
-
-// ─── Songs ───
-
-export function getSongs(): Song[] {
-  const rows = getDb().prepare('SELECT data FROM songs').all() as { data: string }[]
-  return rows.map((r) => JSON.parse(r.data))
-}
-
-export function setSongs(newSongs: Song[]) {
-  const db = getDb()
-  const insert = db.prepare('INSERT OR REPLACE INTO songs (id, data) VALUES (?, ?)')
-  db.transaction(() => {
-    db.prepare('DELETE FROM songs').run()
-    for (const song of newSongs) {
-      insert.run(song.id, JSON.stringify(song))
-    }
-  })()
 }
 
 // ─── Sessions ───

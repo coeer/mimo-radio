@@ -3,6 +3,10 @@
 > 生成时间：2026-06-26
 > 用途：新会话快速接手 mimo-radio 项目当前状态
 >
+> **📌 2026-07-18 更新**：
+> - **KIMI 评审修复批次（P0a/P0b/P1/P2）全部完成**——基于 `docs/KIMI/code-review-2026-07-17.md`（14 发现）+ `fix-plan-integrated-2026-07-17.md`，5 个 commit 落 master。要点：dj 路由路径级 body-parser（25/12mb）+ 413 识别；鉴权 fail-closed（显式 production 才严格）；收藏上报 action 反向修复；tasteCache 按 limit 分 key；fetchWithTimeout 5xx 熔断 + readBodySafely；useAudioPlayer cleanupRef / useTTS AbortController / PlayerBar 换歌重置；**UPnP 下线**；helmet 配置单一来源；端口口径统一（前端 3000）；aiLimiter 只挂 POST；tsconfig 排除测试编译；app 工厂 `createApp()`（`backend/src/app.ts`）。执行报告：`docs/KIMI/reports/exec-{p0b,p1,p0a,p2}-batch-2026-07-18-KIMI.md`
+> - **测试基线**：后端 **288 passed / 32 文件**，前端 **189 passed / 23 文件**，tsc 双零
+>
 > **📌 2026-07-13 更新**：
 > - **P1 残留补完已完成**（`String(err)` + `req as any` 各 1 处清零，提交 `6ffe1aa`）—— §五 P1.2 第 4 项 + P2 第 9 项均 ✅
 > - **当前最新规格**：`docs/plans/2026-07-13-chat-antireentry-prompt-unify.md`（第 5 轮，chat 防重入 + prompt 统一，执行者 DSpro）
@@ -87,10 +91,10 @@
 
 ## 三、当前代码状态
 
-### 测试状态
-- **后端**：242 测试全过，tsc 零错误
-- **前端**：127 测试全过，tsc 零错误（`useAudioPlayer.sideffects.test.ts` 有 5 个既有 tsc 错误，与本次改动无关，运行时测试通过）
-- **Git**：非 git 仓库，无版本控制（改动未提交，注意备份）
+### 测试状态（2026-07-18 最新）
+- **后端**：288 测试全过（32 个 test 文件），tsc 零错误
+- **前端**：189 测试全过（23 个 test 文件），tsc 零错误
+- **Git**：master 分支，trunk-based，远程 `https://github.com/coeer/mimo-radio`（本地远程一致）
 
 ### 服务运行状态（会话结束时）
 - 后端 8001：运行中（dev-backend4.log）
@@ -175,7 +179,7 @@
 10. **addMessage O(n²)**（Mavis P2.2）：长会话性能劣化。低优先级。
 
 ### 🟢 低优先级 / 需外部环境
-11. `useAudioPlayer.sideffects.test.ts` 5 个既有 tsc 错误（Song 缺 emotionTags）。
+11. ~~`useAudioPlayer.sideffects.test.ts` 5 个既有 tsc 错误（Song 缺 emotionTags）~~ **已过时**（2026-07-18 核：前端 tsc 零错误）。
 12. ~~UPnP~~ / 歌单导入端到端测试（依赖外部硬件/数据）。**UPnP 已下线（2026-07-18，P1-3：play() 是 stub 谎报成功 + 与 SSRF 私网拦截天然冲突）**，代码/依赖/路由注册已全部移除。
 13. ASR 语音输入需真实移动设备验证（MediaSession 已删除，见 `docs/plans/2026-07-05-remove-media-session.md`）。
 14. QQ 音源完整链路需 webbridge 开 y.qq.com tab。

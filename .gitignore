@@ -31,3 +31,14 @@ backend/coverage/
 
 # Windows 保留名
 nul
+
+# 归档/备份产物（P2-1）
+*.tar.gz
+*.pid
+
+# TTS 运行时生成的音频（静态托管目录，内容运行时产出）
+backend/static/audio/
+
+# PWA 构建生成的 service worker（next-pwa 构建产物）
+frontend/public/sw.js
+frontend/public/workbox-*.js

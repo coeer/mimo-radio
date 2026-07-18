@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import { errorHandler } from './error'
@@ -91,33 +91,41 @@ describe('errorHandler', () => {
   })
 })
 
-// P0b-1：body 上限挂载顺序 —— 镜像 index.ts 的真实顺序
-// （路径级 25mb/12mb 在全局 1mb 之前注册 + 真实 errorHandler）。
-// ⚠️ 与 index.ts 的 P0b-1 注释互相引用：改挂载顺序/限额要两边同步，防 B5 式快照漂移。
-describe('body 上限挂载顺序（镜像 index.ts）', () => {
-  const orderApp = express()
-  orderApp.use('/api/v1/dj/asr', express.json({ limit: '25mb' }))
-  orderApp.use('/api/v1/dj/analyze-image', express.json({ limit: '12mb' }))
-  orderApp.use(express.json({ limit: '1mb' }))
-  orderApp.post('/api/v1/dj/asr', (_req, res) => res.json({ ok: true }))
-  orderApp.post('/api/v1/dj/analyze-image', (_req, res) => res.json({ ok: true }))
-  orderApp.post('/api/v1/radio/create', (_req, res) => res.json({ ok: true }))
-  orderApp.use(errorHandler)
+// P0b-1：body 上限 —— 直接 supertest 真实 app（P2-2 的 createApp 工厂）。
+// 不再有"复刻挂载顺序"的镜像：测试测的就是生产同一份中间件链（B5 类漂移根治）。
+// ⚠️ 判定口径：>1MB body 到放宽路径应能"到达路由层"——shape 错误返回 400（zod），
+// 而不是 413（body-parser 拦截）；普通路由仍在全局 1mb 之前被 413。
+describe('body 上限（真实 app createApp）', () => {
+  let realApp: express.Express
 
-  const bigBody = { audio: 'x'.repeat(2 * 1024 * 1024) } // ~2MB JSON，超全局 1mb、低于路径级放宽
-
-  it('2MB → /api/v1/dj/asr 不被 413（25mb 放宽生效）', async () => {
-    const res = await request(orderApp).post('/api/v1/dj/asr').send(bigBody)
-    expect(res.status).toBe(200)
+  beforeAll(async () => {
+    // 防空 .env 里配了 API_KEY 导致测试被 401（dotenv 不覆盖已存在的环境变量）
+    vi.stubEnv('API_KEY', '')
+    vi.resetModules()
+    const mod = await import('../app')
+    realApp = mod.createApp()
   })
 
-  it('2MB → /api/v1/dj/analyze-image 不被 413（12mb 放宽生效）', async () => {
-    const res = await request(orderApp).post('/api/v1/dj/analyze-image').send(bigBody)
-    expect(res.status).toBe(200)
+  afterAll(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  // ~2MB JSON，超全局 1mb、低于路径级放宽；shape 故意错误（缺 audio/image 字段）
+  const bigBody = { notAudio: 'x'.repeat(2 * 1024 * 1024) }
+
+  it('2MB → /api/v1/dj/asr 到达路由层（400 zod，而非 413）', async () => {
+    const res = await request(realApp).post('/api/v1/dj/asr').send(bigBody)
+    expect(res.status).toBe(400)
+  })
+
+  it('2MB → /api/v1/dj/analyze-image 到达路由层（400 zod，而非 413）', async () => {
+    const res = await request(realApp).post('/api/v1/dj/analyze-image').send(bigBody)
+    expect(res.status).toBe(400)
   })
 
   it('2MB → /api/v1/radio/create 仍 413（全局 1mb 未被破坏）', async () => {
-    const res = await request(orderApp).post('/api/v1/radio/create').send(bigBody)
+    const res = await request(realApp).post('/api/v1/radio/create').send(bigBody)
     expect(res.status).toBe(413)
     expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE')
   })

@@ -1,5 +1,6 @@
 import { MusicSource, registerMusicSource } from './musicSource'
 import { Song } from '../types'
+import { config } from '../config'
 import { fetchWithTimeout } from '../utils/fetchWithTimeout'
 import { logger, toErrorMeta } from '../utils/logger'
 
@@ -17,7 +18,7 @@ import { logger, toErrorMeta } from '../utils/logger'
  *   - 浏览器已登录 y.qq.com 并保持 QQ 音乐播放器页面开着
  */
 
-const WEBBRIDGE_URL = process.env.WEBBRIDGE_URL || 'http://127.0.0.1:10086'
+const WEBBRIDGE_URL = config.webbridgeUrl // P2-2：收进 config 统一管理（原直读 process.env）
 const WEBBRIDGE_SESSION = 'qq-radio'
 const WEBBRIDGE_TIMEOUT = 25000
 
