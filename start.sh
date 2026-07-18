@@ -71,7 +71,7 @@ fi
 echo -e "${GREEN}✅ 后端已启动 (PID: $BACKEND_PID)${NC}\n"
 
 # Start frontend
-echo -e "${BLUE}🚀 启动前端服务 (localhost:3001)...${NC}"
+echo -e "${BLUE}🚀 启动前端服务 (localhost:3000)...${NC}"
 (cd frontend && npm run dev > /tmp/mimo-frontend.log 2>&1) &
 FRONTEND_PID=$!
 
@@ -91,7 +91,7 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${GREEN}  🎧 MiMo AI Radio 已就绪！${NC}"
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 echo -e ""
-echo -e "  ${YELLOW}前端:${NC} ${GREEN}http://localhost:3001${NC}"
+echo -e "  ${YELLOW}前端:${NC} ${GREEN}http://localhost:3000${NC}"
 echo -e "  ${YELLOW}后端:${NC} ${GREEN}http://localhost:8001${NC}"
 echo -e "  ${YELLOW}API :${NC} ${GREEN}http://localhost:8001/api${NC}"
 echo -e ""

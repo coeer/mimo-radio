@@ -20,7 +20,7 @@ type Segment =
 
 /**
  * 把含 **加粗** / `代码` 的文本解析为片段数组（标记不计入可见字符长度）。
- * 与 MarkdownText 保持一致的行内语法子集。
+ * （行内语法子集；原 MarkdownText 组件已删除——2026-07-18 P0a-5 死代码清理）
  */
 function parseSegments(text: string): Segment[] {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)

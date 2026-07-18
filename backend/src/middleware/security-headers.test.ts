@@ -2,42 +2,20 @@ import { describe, it, expect } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import helmet from 'helmet'
+import { HELMET_OPTIONS } from '../config/securityHeaders'
 
 /**
- * 后端 helmet 配置快照测试。
+ * 后端 helmet 安全头测试（P0a-1 / B5 根治版）。
  *
- * 目的：保证 backend/src/index.ts 中的 helmet() 调用所产出的安全头组合符合规格。
- * 这里复刻 index.ts 里的 helmet 配置（snapshot），避免在测试里 import index.ts
- * 导致数据库初始化、端口监听等副作用。
- *
- * 如未来修改了 index.ts 的 helmet 配置，请同步更新本测试的 cspMatch。
+ * 直接引用 config/securityHeaders.ts 的 HELMET_OPTIONS——index.ts 用的也是同一份，
+ * 测试测的就是真实配置，不再是自我复制的快照。
+ * （B5 教训：2026-07-13 styleSrc 收紧为 'self'，旧测试副本仍断言 'unsafe-inline'，
+ *  配置与测试漂移却双双全绿。）
  */
-
-const cspMatch = {
-  defaultSrc: ["'self'"],
-  scriptSrc: ["'self'"],
-  styleSrc: ["'self'", "'unsafe-inline'"],
-  imgSrc: ["'self'", 'data:'],
-  connectSrc: ["'self'"],
-  frameSrc: ["'none'"],
-  objectSrc: ["'none'"],
-  baseUri: ["'self'"],
-  formAction: ["'self'"],
-  frameAncestors: ["'none'"],
-  upgradeInsecureRequests: [],
-}
 
 function buildConfiguredApp() {
   const app = express()
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        useDefaults: false,
-        directives: cspMatch,
-      },
-      crossOriginEmbedderPolicy: false,
-    }),
-  )
+  app.use(helmet(HELMET_OPTIONS))
   app.get('/health', (_req, res) => {
     res.json({ ok: true })
   })
@@ -121,13 +99,13 @@ describe('backend helmet security headers', () => {
     expect(res.headers['cross-origin-embedder-policy']).toBeUndefined()
   })
 
-  it('CSP 完整字符串快照——如修改 index.ts helmet 配置请同步本测试', async () => {
+  it('CSP 完整字符串快照——directives 与 HELMET_OPTIONS 同源，改配置只改 securityHeaders.ts', async () => {
     const res = await request(buildConfiguredApp()).get('/health')
     const csp = res.headers['content-security-policy'] as string
     // 校验关键字都出现（顺序由 helmet 内部固定）：每条 directive 各匹配一次
     expect(csp).toContain("default-src 'self'")
     expect(csp).toContain("script-src 'self'")
-    expect(csp).toContain("style-src 'self' 'unsafe-inline'")
+    expect(csp).toContain("style-src 'self'")
     expect(csp).toContain("img-src 'self' data:")
     expect(csp).toContain("connect-src 'self'")
     expect(csp).toContain("frame-src 'none'")
@@ -136,5 +114,13 @@ describe('backend helmet security headers', () => {
     expect(csp).toContain("form-action 'self'")
     expect(csp).toContain("frame-ancestors 'none'")
     expect(csp).toContain('upgrade-insecure-requests')
+  })
+
+  it('style-src 不允许 unsafe-inline（B5 回归：2026-07-13 收紧后的真实配置）', async () => {
+    const res = await request(buildConfiguredApp()).get('/health')
+    const csp = res.headers['content-security-policy'] as string
+    // style-src 段落必须恰好是 'self'，不得回退到 'unsafe-inline'
+    expect(csp).toMatch(/style-src 'self'(;|$)/)
+    expect(csp).not.toContain('unsafe-inline')
   })
 })

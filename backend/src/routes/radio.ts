@@ -11,6 +11,7 @@ import { getMusicSource } from '../services/musicSource'
 import { composeSystemPrompt } from '../services/djPersona'
 import { validateBody } from '../middleware/validate'
 import { sessionAuth } from '../middleware/sessionAuth'
+import { aiLimiter } from '../middleware/aiLimiter'
 import { signSession } from '../utils/sessionToken'
 import { sanitizePromptInput } from '../utils/promptGuard'
 import { extractDJMemory, djMemoryPromptBlock } from '../utils/djMemory'
@@ -99,7 +100,7 @@ router.get('/models', (_req, res) => {
 })
 
 // POST /api/radio/create
-router.post('/create', validateBody(createSchema), async (req, res, next) => {
+router.post('/create', aiLimiter, validateBody(createSchema), async (req, res, next) => {
   try {
     ensureSongsLoaded()
     const { mood, dj_enabled, user_input, model } = req.body
@@ -182,7 +183,7 @@ router.post('/create', validateBody(createSchema), async (req, res, next) => {
 })
 
 // POST /api/radio/:id/next
-router.post('/:id/next', sessionAuth, validateBody(nextBodySchema), async (req, res, next) => {
+router.post('/:id/next', aiLimiter, sessionAuth, validateBody(nextBodySchema), async (req, res, next) => {
   try {
     const { model } = req.body
     const ai = getAIService(model)
@@ -262,7 +263,7 @@ ${dislikedArtistsForTransition.length > 0 ? `用户跳过的歌手：${dislikedA
 })
 
 // POST /api/radio/:id/chat
-router.post('/:id/chat', sessionAuth, validateBody(chatSchema), async (req, res, next) => {
+router.post('/:id/chat', aiLimiter, sessionAuth, validateBody(chatSchema), async (req, res, next) => {
   try {
     const { text, model } = req.body
     const ai = getAIService(model)

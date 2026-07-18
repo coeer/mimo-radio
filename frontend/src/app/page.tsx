@@ -167,8 +167,8 @@ export default function Home() {
 
   return (
     <>
-      {/* 全屏播放器（条件渲染） */}
-      {isFullscreenPlayer && <FullscreenPlayer />}
+      {/* 全屏播放器（条件渲染）—— P0a-3（F4）：透传 handleSeek 让进度条点击真正 seek */}
+      {isFullscreenPlayer && <FullscreenPlayer onSeek={handleSeek} />}
 
       {/* Skip to content link for keyboard navigation */}
       <a

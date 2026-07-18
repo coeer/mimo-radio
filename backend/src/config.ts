@@ -12,7 +12,8 @@ export const config = {
   // CORS
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://127.0.0.1:3001'],
+    // P0a-2（B7）：3000 是前端 next dev 真实默认端口（原白名单独缺）；3001/3002/3003 保留兼容显式指定端口场景
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001'],
 
   // MiMo (小米大模型) - 默认 AI 大脑
   mimoApiKey: process.env.MIMO_API_KEY || '',

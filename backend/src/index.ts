@@ -13,6 +13,7 @@ import { initDb, startSessionCleanup, checkDbHealth } from './db'
 import { logger, cleanupOldLogs, toErrorMeta } from './utils/logger'
 import { assertSecretConfigured } from './utils/sessionToken'
 import { getCircuitStates } from './utils/fetchWithTimeout'
+import { HELMET_OPTIONS } from './config/securityHeaders'
 
 import radioRoutes from './routes/radio'
 import djRoutes from './routes/dj'
@@ -29,36 +30,9 @@ import logRoutes from './routes/log'
 
 const app = express()
 
-// Security headers
-// 后端默认仅响应 JSON，CSP 作为兜底防护：
-//   - 防 XSS：未来若有端点返回 HTML，浏览器将按 CSP 限制资源来源
-//   - 与 helmet 其它安全头形成完整链条（X-Content-Type-Options / X-Frame-Options 等仍由默认启用）
-//   - PWA 是前端独立部署，不受后端 CSP 影响；后端响应 JSON 时浏览器不强制 CSP
-//
-// CSP 设计：
-//   - useDefaults: false —— 不与 helmet 默认合并，从零显式声明，避免历史默认值未来变动引入回归
-//   - crossOriginEmbedderPolicy: false —— PWA/前端资源加载兼容；COEP=require-corp 会破坏跨域资源（如网易云封面）
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      useDefaults: false,
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"], // 后端纯 JSON，禁 inline 即可
-        styleSrc: ["'self'"], // 纯 JSON 后端，无 CSS 资源
-        imgSrc: ["'self'", 'data:'], // 允许 data: base64（封面图等）
-        connectSrc: ["'self'"], // fetch/XHR 限制同源
-        frameSrc: ["'none'"], // 不允许嵌入
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-    crossOriginEmbedderPolicy: false, // 防 PWA 兼容性问题（见上行注释）
-  }),
-)
+// Security headers —— 配置单一来源见 config/securityHeaders.ts（P0a-1/B5：index.ts 与测试共享，防快照漂移）
+// 后端默认仅响应 JSON，CSP 作为兜底防护；PWA 是前端独立部署，不受后端 CSP 影响
+app.use(helmet(HELMET_OPTIONS))
 app.use(compression())
 
 // Rate limiting — general
@@ -70,15 +44,7 @@ const generalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 })
 
-// Rate limiting — AI / expensive endpoints
-const aiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'AI generation rate limit exceeded. Please slow down.' },
-})
-
+// P0a-4（B1）：aiLimiter 移到 middleware/aiLimiter.ts，只在具体 POST 路由挂载（不再整 router 挂）
 app.use(generalLimiter)
 
 // Middleware
@@ -152,8 +118,8 @@ app.use((req, res, next) => {
 app.use('/api', apiKeyAuth)
 
 // API routes (versioned: /api/v1/*)
-app.use('/api/v1/radio', aiLimiter, radioRoutes)
-app.use('/api/v1/dj', aiLimiter, djRoutes)
+app.use('/api/v1/radio', radioRoutes)
+app.use('/api/v1/dj', djRoutes)
 app.use('/api/v1/dj/persona', djPersonaRoutes)
 app.use('/api/v1/music-source', musicSourceRoutes)
 app.use('/api/v1/tts-engines', ttsEnginesRoutes)

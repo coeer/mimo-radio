@@ -48,7 +48,7 @@ echo [完成] 后端已启动
 echo.
 
 REM Start frontend in new window
-echo [启动] 正在启动前端服务 (localhost:3001)...
+echo [启动] 正在启动前端服务 (localhost:3000)...
 start "MiMo Frontend" cmd /k "cd /d %~dp0frontend && echo [前端] 启动中... && npm run dev"
 
 timeout /t 5 /nobreak >nul
@@ -60,7 +60,7 @@ echo ═════════════════════════
 echo   🎧 MiMo AI Radio 已就绪！
 echo ══════════════════════════════════════════
 echo.
-echo   前端: http://localhost:3001
+echo   前端: http://localhost:3000
 echo   后端: http://localhost:8001
 echo   API : http://localhost:8001/api
 echo.

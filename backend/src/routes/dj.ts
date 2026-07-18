@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto'
 import { join, dirname } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { validateBody } from '../middleware/validate'
+import { aiLimiter } from '../middleware/aiLimiter'
 import { cleanupAudioFiles } from '../utils/fileCleanup'
 import type { Song, SessionContext } from '../types'
 
@@ -60,7 +61,7 @@ const asrSchema = z.object({
 })
 
 // POST /api/dj/transition
-router.post('/transition', validateBody(transitionSchema), async (req, res, next) => {
+router.post('/transition', aiLimiter, validateBody(transitionSchema), async (req, res, next) => {
   try {
     const { prev_song, next_song, context, model } = req.body
     const ai = getAIService(model)
@@ -77,7 +78,7 @@ router.get('/tts-voices', (_req, res) => {
 })
 
 // POST /api/v1/dj/tts
-router.post('/tts', validateBody(ttsSchema), async (req, res, next) => {
+router.post('/tts', aiLimiter, validateBody(ttsSchema), async (req, res, next) => {
   try {
     const { text, engine, voice } = req.body
     if (!text) {
@@ -125,7 +126,7 @@ router.post('/tts', validateBody(ttsSchema), async (req, res, next) => {
 })
 
 // POST /api/dj/intro
-router.post('/intro', validateBody(introSchema), async (req, res, next) => {
+router.post('/intro', aiLimiter, validateBody(introSchema), async (req, res, next) => {
   try {
     const { mood, context, model } = req.body
     const ai = getAIService(model)
@@ -137,7 +138,7 @@ router.post('/intro', validateBody(introSchema), async (req, res, next) => {
 })
 
 // POST /api/dj/analyze-image
-router.post('/analyze-image', validateBody(analyzeImageSchema), async (req, res, next) => {
+router.post('/analyze-image', aiLimiter, validateBody(analyzeImageSchema), async (req, res, next) => {
   try {
     const { text, image, model } = req.body
     if (!image) {
@@ -173,7 +174,7 @@ router.post('/analyze-image', validateBody(analyzeImageSchema), async (req, res,
 
 // POST /api/v1/dj/asr —— 语音识别（语音 → 文字）
 // 为未来"语音点歌"功能预留。body: { audio: base64, format?: 'wav'|'mp3', language?: 'auto'|'zh'|'en' }
-router.post('/asr', validateBody(asrSchema), async (req, res, next) => {
+router.post('/asr', aiLimiter, validateBody(asrSchema), async (req, res, next) => {
   try {
     const { audio, format, language } = req.body
     // 去掉可能的 data URL 前缀

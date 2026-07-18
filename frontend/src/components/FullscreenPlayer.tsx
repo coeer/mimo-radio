@@ -13,7 +13,7 @@ import CoverArt from './CoverArt'
 /**
  * Progress bar + time display — isolated to prevent full FullscreenPlayer re-render.
  */
-const FullscreenProgressBar = memo(function FullscreenProgressBar() {
+const FullscreenProgressBar = memo(function FullscreenProgressBar({ onSeek }: { onSeek?: (time: number) => void }) {
   const currentTime = useRadioStore((s) => s.currentTime)
   const duration = useRadioStore((s) => s.duration)
   const setCurrentTime = useRadioStore((s) => s.setCurrentTime)
@@ -29,6 +29,9 @@ const FullscreenProgressBar = memo(function FullscreenProgressBar() {
           const p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
           const t = p * duration
           setCurrentTime(t)
+          // P0a-3（F4）：真正 seek audio——照搬 KimiCard ProgressBar 的 setCurrentTime+onSeek 双调用，
+          // 原实现只写 store，下一秒 timeupdate 把进度条拉回（"弹跳"）
+          onSeek?.(t)
         }}
         role="slider"
         tabIndex={0}
@@ -128,7 +131,7 @@ const LyricDisplay = memo(function LyricDisplay({ currentSong }: { currentSong: 
  *
  * 进入时强制浅色主题，退出恢复用户原主题。
  */
-function FullscreenPlayer() {
+function FullscreenPlayer({ onSeek }: { onSeek?: (time: number) => void }) {
   const currentSong = useRadioStore((s) => s.currentSong)
   const isPlaying = useRadioStore((s) => s.isPlaying)
   const isSpeaking = useRadioStore((s) => s.isSpeaking)
@@ -287,7 +290,7 @@ function FullscreenPlayer() {
             )}
           </button>
 
-          <FullscreenProgressBar />
+          <FullscreenProgressBar onSeek={onSeek} />
         </div>
       </div>
 
