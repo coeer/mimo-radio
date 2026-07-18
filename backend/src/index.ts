@@ -85,6 +85,12 @@ app.use(generalLimiter)
 // Middleware
 app.use(corsMiddleware)
 app.use(requestId)
+// P0b-1：路径级 body-parser 放宽（ASR ≤20MB base64 / analyze-image ≤10MB base64，见 dj.ts schema）。
+// 必须注册在全局 1mb 之前：body-parser 解析成功后设 req._body，全局解析器会跳过；
+// 若放在全局之后，>1MB 请求先被全局 413，永远到不了这里（实测验证，见 verdict-p0b-1-body-parser-order-2026-07-18）。
+// 测试镜像：middleware/error.test.ts 的「body 上限挂载顺序」describe（改这里要同步改测试）。
+app.use('/api/v1/dj/asr', express.json({ limit: '25mb' }))
+app.use('/api/v1/dj/analyze-image', express.json({ limit: '12mb' }))
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 

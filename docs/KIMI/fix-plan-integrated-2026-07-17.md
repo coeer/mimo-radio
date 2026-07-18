@@ -160,14 +160,16 @@ router.post('/transition', aiLimiter, validateBody(...), ...)
 
 **改法**（2 处）：
 
-1. `index.ts` 在 dj 路由前挂路径级 body-parser（先于全局生效）：
+> ⚠️ **2026-07-18 修订**：路径级 body-parser 必须在**全局 `express.json({limit:'1mb'})` 之前**注册（不是之后）。body-parser 按注册顺序执行，先解析成功的设 `_body=true` 让后续跳过；超限直接抛 413 到不了下一个 parser。详见 `docs/KIMI/verdict-p0b-1-body-parser-order-2026-07-18.md`（KIMI 实验证伪了 ZCode 原指示）。
+
+1. `index.ts` 在全局 1mb 之前挂路径级 body-parser：
 ```ts
-// 在 app.use('/api/v1/dj', djRoutes) 之前
+// 在 app.use(express.json({ limit: '1mb' })) 之前
 app.use('/api/v1/dj/asr', express.json({ limit: '25mb' }))
 app.use('/api/v1/dj/analyze-image', express.json({ limit: '12mb' }))
-app.use('/api/v1/dj', djRoutes)
+app.use(express.json({ limit: '1mb' }))   // 全局 1mb，位置不动但现在在路径级之后
 ```
-**注意**：路径级 body-parser 必须在全局 `express.json({limit:'1mb'})` 之后、路由注册之前挂载，且路径精确匹配。全局保持 1mb 不变（其他路由的安全收紧不放松）。
+**机制**：路径级 parser 先执行，解析成功设 `_body=true` → 全局 parser 跳过（不拦截）；普通路由没匹配路径级，走全局 1mb 拦截。路径精确匹配。全局保持 1mb 不变（其他路由的安全收紧不放松）。
 
 2. `middleware/error.ts` 识别 413 错误（body-parser 抛 `type='entity.too.large'`）：
 ```ts

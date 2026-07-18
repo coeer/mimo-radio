@@ -19,6 +19,15 @@ export function errorHandler(
   const path = req.path
   const method = req.method
 
+  // body-parser 超限（entity.too.large）→ 413，不要落到 500 误报为服务器错误
+  if (err && typeof err === 'object' && 'type' in err && (err as { type: string }).type === 'entity.too.large') {
+    logger.warn('Request body too large', { requestId: req.requestId, path, method })
+    return res.status(413).json({
+      success: false,
+      error: { message: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' },
+    })
+  }
+
   if (err instanceof AppError) {
     logger.error(`[${err.code}] ${err.message}`, { requestId: req.requestId, path, method, statusCode: err.statusCode })
     const response: Record<string, unknown> = {
