@@ -14,22 +14,27 @@ update_rule: 每轮任务完成后更新；状态变化时立即更新
 
 ---
 
-## 一、当前项目状态（2026-07-18 核实）
+## 一、当前项目状态（2026-07-22 核实）
 
 ### 1.1 测试基线（不可降级）
 
 | 层 | 文件数 | 测试数 | tsc |
 |----|--------|--------|-----|
-| 后端 | 33 | **277 passed** | 零错误 |
-| 前端 | 22 | **179 passed** | 零错误 |
+| 后端 | 32 | **305 passed** | 零错误 |
+| 前端 | 24 | **204 passed** | 零错误 |
+
+> 📌 基线较 277/179（起始）净增 +28/+25：P0a~P2（+11/+10）+ SSRF IPv6/DNS（+17）+ F4 仲裁层（+15）+ backlog 零增 + 短期清理零增。
 
 ### 1.2 Git 状态
 
 - **分支**：master（trunk-based，直接 commit，不建分支）
 - **远程**：已 push 到 GitHub（`https://github.com/coeer/mimo-radio.git`）
-- **最新提交**：`d63bb63 docs: add execution report for chat anti-reentry + prompt unify`
+- **最新提交**：见 `git log --oneline -3`（trunk-based，持续演进）
 - **本地 vs 远程**：一致
-- **未跟踪**：`docs/KIMI/`（KIMI 工作空间 + 5 份产出）+ `docs/ZCode/`（本次新建）—— **新会话进场前必须先 commit**（否则新会话看不到这些文件）
+- **2026-07-18 ~ 2026-07-22 技术债清理 commit 链**（KIMI 执行 P0a~P2 + MiNiMax 执行短期/剩余 + ZCode 收尾）：
+  - `3e8024c` SSRF IPv6+DNS / `2205ae4` backlog 6 项 / `2616b39` InputArea cleanup / `1fcf694` F4 仲裁层
+  - `0cd8c64` 死代码清理 / `cf227e5` sessionAuth+mood+plan / 及更早 P0a~P2
+- **审查报告**（docs/ZCode/audits/）：review-p0a / review-shortterm-batch / review-remaining / full-review / review-kimi-plans
 
 ### 1.3 环境
 
@@ -37,38 +42,44 @@ update_rule: 每轮任务完成后更新；状态变化时立即更新
 |----|-----|------|
 | 项目根 | `D:\Coder\mimo-radio` | |
 | 后端端口 | 8001 | `backend/` |
-| 前端端口 | **3000**（不是 3001）| start 脚本打印错了（B7 待修）|
+| 前端端口 | **3000** | ✅ 口径已统一（.env.example + start 脚本 + CORS + COLLABORATION/ARCHITECTURE）|
 | webbridge | 127.0.0.1:10086 | daemon，uptime 长 |
 | workspace 指令 | `D:\Coder\AGENTS.md` | mimo-radio + ai-radio + 根级脚本 |
 
 ---
 
-## 二、当前正在推进的任务
+## 二、技术债清理总结（2026-07-22 完成）
 
-### 2.1 大任务：基于 KIMI 2026-07-17 深度评审的修复整合方案
+### 2.1 已完成的清理（全部 ZCode 复核通过）
 
-**来源**：
-- `docs/KIMI/code-review-2026-07-17.md` —— KIMI 做的评审（14 个发现，全部属实）
-- `docs/KIMI/review-supplement-2026-07-17.md` —— ZCode 核实 + 4 点调整
-- `docs/KIMI/fix-plan-integrated-2026-07-17.md` —— **整合方案（执行依据）**
-
-### 2.2 四阶段进度
-
-| 阶段 | 内容 | 执行者 | 状态 |
+| 阶段 | 内容 | 执行者 | 复核 |
 |------|------|--------|------|
-| **P0a** | 5 项机械清理（helmet 测试同步 / 端口口径 / F4 全屏 seek / aiLimiter 拆挂载 / 死代码清理）| **ZCode 自做** | ⏸ **未开始**（开新会话第一件事）|
-| **P0b** | 4 项（R1 body 上限 / R2 鉴权 fail-closed / F1 收藏反向 / B6 tasteCache 分 key）| KIMI | ⏸ 未开始 |
-| **P1** | 4 项（B2 fetchWithTimeout / F2 监听泄漏 / F3 TTS AbortController / F5 PlayerBar 重置）| KIMI | ⏸ 未开始 |
-| **P2** | 仓库卫生（tsconfig exclude / .gitignore / git rm 构建产物 / UPnP 下线 / 文档更新）| 任意 | ⏸ 未开始 |
+| **P0a** | helmet 共享源 / 端口口径 / F4 全屏 seek / aiLimiter 拆挂载 / 死代码 | KIMI（fe0f166）| ✅ A- |
+| **P0b** | R1 body 上限 / R2 鉴权 fail-closed / F1 收藏反向 / B6 tasteCache | KIMI（c3096b0+af9e120）| ✅（全面审核抽验）|
+| **P1** | B2 fetchWithTimeout / F2 监听泄漏 / F3 TTS AbortController / F5 PlayerBar + UPnP 下线 | KIMI（540a92d）| ✅（全面审核抽验）|
+| **P2** | tsconfig / gitignore / app 工厂 / 文档 | KIMI（87915cd）| ✅（全面审核抽验）|
+| **短期清理** | node-ssdp 死依赖 / icons.tsx / 端口漂移 / 串词字数 / sessionAuth query / mood 兜底 / plan setTimeout | MiNiMax（0cd8c64+cf227e5）| ✅ A |
+| **SSRF P0** | IPv6 字面量 + DNS 解析校验 + async 传导 | MiNiMax（3e8024c）| ✅ A |
+| **backlog 剩余** | generalLimiter skip / logger sanitize / timestamp / sanitize 合并 / feedback TTL / API envelope | MiNiMax（2205ae4）| ✅ A |
+| **InputArea** | MediaRecorder unmount cleanup + setState 守卫 | MiNiMax（2616b39）| ✅ A |
+| **F4 仲裁层** | playRequest 单点仲裁 + 两阶段 + R1-R5 | MiNiMax（1fcf694）| ✅ A |
+| **前端 timestamp** | 7 处 timestamp:0 → Date.now() | ZCode 自做 | ✅ |
 
-### 2.3 4 点调整（KIMI 原方案 vs ZCode 整合方案的冲突仲裁）
+### 2.2 关键决策（不可违反）
 
-KIMI 原方案 vs ZCode 整合方案冲突时，**以整合方案为准**：
+1. **sessionToken**：`sessionId.sig`（HMAC-SHA256），不持久化，不过期（上线前再加）
+2. **SSRF 白名单**含 127.0.0.1:10086（webbridge）；**isSafeUrl 已改 async + DNS 校验**（防 rebinding + IPv6 绕过）
+3. **dev 模式 API 认证放行**；显式 `NODE_ENV=production` 才严格（fail-closed）
+4. **DJ 串词**：intro/transition/chat 统一 60-120 字
+5. **F4 仲裁层**：所有 isPlaying 写入走 `playRequest(action, source)`，setIsPlaying 标私有；nextSong/prevSong 两阶段（切歌 → 仲裁）
+6. **Fish Audio / 飞书 / UPnP / MediaSession / TtsEngineSwitcher / MarkdownText**：全部删除（代码+依赖+文档）
 
-1. **R2 鉴权方向反过来** —— 不是"非 dev 拒绝启动"，是"显式配 `NODE_ENV=production` 才严格，没配就警告但能跑"。理由：单人开发项目，忘配环境变量起不来体验极差。
-2. **F4 全屏进度条 seek 提到 P0** —— 核心交互损坏，不是 P1。
-3. **P0-3 修收藏要顺手改误导性注释** —— `KimiCard.tsx:121` 的"F1 已修复"注释只解决了一半（re-render），闭包陈旧还在。
-4. **UPnP 下线连带清理入口注册** —— 铁律 6，删 `index.ts:156` 路由注册 + import + package.json 依赖 + 文档引用。
+### 2.3 剩余 backlog（低优先级，不阻塞日常使用）
+
+- 🟡 ARCHITECTURE.md 正文重写（已知过时，有头注，单独任务）
+- 🟢 F4 真机 E2E（各浏览器 autoplay policy，需真浏览器手测）
+- 🟢 trust proxy 1（确认部署在反代后再加）
+- 🔴 **git PAT 撤销**（用户操作，非代码——见 §五提醒）
 
 ---
 
@@ -186,38 +197,56 @@ KIMI 的对齐文档：`docs/KIMI/alignment-2026-07-18.md`（双身份协议，Z
 
 ## 七、下一步行动（新会话进场后的优先级）
 
-### 🔴 第一优先：commit 当前未跟踪文件
+### 🔴 第一优先：复核 KIMI 已执行的 P0b / P1 / P2
 
-```bash
-cd D:/Coder/mimo-radio
-git add docs/KIMI/ docs/ZCode/
-git commit -m "docs: KIMI 双身份对齐 + ZCode 规划者身份卡 + 整合修复方案"
-git push origin master
-```
+**背景**：KIMI 在 2026-07-18 18:03~19:14 未经 ZCode 复核连续执行了 P0a+P0b+P1+P2（4 个 commit）。P0a 已复核完成（A-）。**P0b/P1/P2 尚未过 ZCode 复核**，测试虽全绿，但代码质量需逐项核实（不盲信测试绿 = 代码对）。
 
-**理由**：新会话的 ZCode 看不到未跟踪文件，必须先入库。
+复核顺序（按风险）：
+1. **P0b**（`c3096b0` + `af9e120`）：R1 body 上限 / R2 鉴权 fail-closed / F1 收藏反向 / B6 tasteCache 分 key
+   - 报告：`docs/KIMI/reports/exec-p0b-batch-2026-07-18-KIMI.md`
+   - 重点：**R2 方向**（必须按 ZCode 调整后的"显式 production 才严格"，不是 KIMI 原案的"非 dev 拒绝启动"——这是 review-supplement 的 4 点调整之一）；**F1 收藏闭包**（前科：必须用 getState() 读最新值）
+2. **P1**（`540a92d`）：B2 fetchWithTimeout / F2 监听泄漏 / F3 TTS AbortController / F5 PlayerBar 重置 + UPnP 下线
+   - 报告：`docs/KIMI/reports/exec-p1-batch-2026-07-18-KIMI.md`
+   - 重点：**F2 cleanupRef 模式**（前科：cancelled=true 单独不够）；**F3 复用 chatAbortRef 模式**；**UPnP 下线铁律 6**（HANDOVER/COLLABORATION 等契约文档引用）
+3. **P2**（`87915cd`）：tsconfig + gitignore + app 工厂 + 文档
+   - 报告：`docs/KIMI/reports/exec-p2-batch-2026-07-18-KIMI.md`
+   - 重点：app 工厂改造是否破坏 P0a-1 的共享配置引用链
 
-### 🟠 第二优先：ZCode 自做 P0a（5 项机械清理）
+每阶段复核完写审查报告到 `docs/ZCode/audits/review-p0b-...` / `review-p1-...` / `review-p2-...`。
 
-见 `docs/KIMI/fix-plan-integrated-2026-07-17.md` §P0a：
-- P0a-1：helmet 测试同步（B5，我上次留下的债）
-- P0a-2：端口口径统一（B7 / C1）
-- P0a-3：F4 全屏进度条 seek（4 处改动）
-- P0a-4：aiLimiter 拆挂载（B1，抽到共享模块）
-- P0a-5：死代码清理（TtsEngineSwitcher / MarkdownText）
+### 🟠 第二优先：commit 整理（文档落盘）
 
-每项做完跑 tsc + vitest，全部做完一次性 commit。
+复核完成后，把未跟踪的文档一次性 commit：
+- `docs/KIMI/plans/`（KIMI 的 F4 + backlog 方案，已修订）
+- `docs/KIMI/review-batch-all-2026-07-18.md`（KIMI 自审报告）
+- `docs/MiNiMax/plans/`（派给 MiNiMax 的 P0a 规格）
+- `docs/MiNiMax/reports/exec-p0a-2026-07-18-MiNiMax.md`（MiNiMax 核实报告）
+- `docs/ZCode/audits/`（ZCode 审查报告 ×3：review-kimi-plans / review-p0a / 后续 P0b/P1/P2）
 
-### 🟡 第三优先：派 KIMI 执行 P0b + P1
+### 🟡 第三优先：追加案例到 COLLABORATION §10.6
 
-P0a 完成后，告诉用户：
-> "P0a 做完了，commit xxx。现在让 KIMI 执行 P0b，把 docs/KIMI/fix-plan-integrated-2026-07-17.md 的 P0b 部分（4 项）派给它。"
+两条新案例（见 `docs/ZCode/audits/review-kimi-plans-2026-07-18.md` §七 + `review-p0a-2026-07-18.md` §2.4）：
+1. "基线数字照抄未实跑核实"（KIMI 两份方案 288/189 vs 实际 277/179）
+2. "双身份自审后未过 ZCode 复核即 commit"（KIMI P0a 批）
+3. "复用反模式"（B2-5 startSessionCleanup 无 clearInterval）
 
-用户会用 `docs/KIMI/prompt-dual-role-2026-07-18.md` 里的标准话术派活。
+### 🟢 第四优先：下一阶段任务
 
-### 🟢 第四优先：审查 KIMI 的 P0b 报告
+P0a~P2 全部复核通过后，进入 fix-plan-integrated 之后的任务：
+- **F4 isPlaying 仲裁层**（规格已修订：`docs/KIMI/plans/plan-f4-isplaying-arbiter-2026-07-18-KIMI.md`，P1 阶段，KIMI 执行）
+- **backlog 15 项**（规格已修订：`docs/KIMI/plans/plan-backlog-15-2026-07-18-KIMI.md`，P2 之后）
 
-KIMI 做完后，用户会说"检查 docs/KIMI/reports/exec-p0b-...-KIMI.md"。按审查 DSpro 的标准逐项核实 + 打分 + 前科提醒。
+---
+
+## 七-二、协作流程纪律提醒（本轮新增）
+
+> 本轮发现 KIMI 绕过 ZCode 复核连续执行了 P0a~P2。代码质量 A-（可接受），但流程违规。重申：
+
+**KIMI（双身份）的必守流程**：
+1. 做完自审后，**必须通过用户中转告诉 ZCode"做完了，请复核"**
+2. 等 ZCode 复核通过（或用户明确说"不用复核直接进下一项"）才算完成
+3. **自审报告 ≠ ZCode 复核通过**（自审有盲点，对方视角能补）
+4. 计划批量执行前，**先告知规划者意图**（避免规划者重复派活 → MiNiMax 空转）
 
 ---
 
