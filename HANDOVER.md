@@ -132,7 +132,7 @@
 - `components/AudioWaveform.tsx`（RAF 限帧）
 - `components/QueueList.tsx`（队列滚动）
 - `components/TerminalLog.tsx`（删飞书文案）
-- `components/TtsEngineSwitcher.tsx`（Fish 注释）
+- ~~`components/TtsEngineSwitcher.tsx`~~（**已删除**——2026-07-18 P0a-5 死代码清理，Fish 下线后无引用）
 - `components/ErrorBoundary.tsx` + 多个组件（console→logger）
 - `lib/logger.ts`（新增：前端日志封装）
 - `types/api.ts`（Song 加 neteaseId）
@@ -228,7 +228,7 @@ document.body.innerText.match(/ON AIR|PLAYING/)  // 播放状态
 ### 已达成（~92%）
 - ✅ AI 个性化歌单（MiMo 替代 Claude）
 - ✅ AI DJ 语音播报（MiMo TTS 替代 Fish Audio，三引擎）
-- ✅ DJ 串词深度（80-150字，对齐视频）
+- ✅ DJ 串词深度（60-120字，对齐视频）
 - ✅ 聊天式推荐 + 换歌
 - ✅ 三大视觉界面（首页/全屏/个人主页）
 - ✅ 深色/浅色主题

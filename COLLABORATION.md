@@ -55,7 +55,7 @@
 
 ### 2.2 三层架构
 ```
-PWA 前端（Next.js 14 + React 18 + Zustand）  :3001
+PWA 前端（Next.js 14 + React 18 + Zustand）  :3000
         ↕ HTTP（非 git，dev 放行鉴权）
 Node 中枢（Express 4 + TS + better-sqlite3）  :8001
         ↕ 外部 API
@@ -240,14 +240,14 @@ cd D:/Coder/mimo-radio/backend && npx tsx src/index.ts
 # 启前端
 cd D:/Coder/mimo-radio/frontend && npm run dev
 ```
-- 后端默认 `:8001`（`.env` 的 `API_BASE_URL`），前端 `:3001`（next dev 默认 3000，看实际）
+- 后端默认 `:8001`（`.env` 的 `API_BASE_URL`），前端 `:3000`（next dev 默认 3000）
 - webbridge daemon `:10086`（独立常驻，不在本项目代码里，别动它）
 
 ### 5.3 webbridge 浏览器自测（端到端验证用）
 封装在 `logs/wb.py`，自动处理 Windows 中文 JSON body 问题：
 ```bash
 cd D:/Coder/mimo-radio/logs
-python wb.py navigate '{"url":"http://localhost:3001"}'    # 导航
+python wb.py navigate '{"url":"http://localhost:3000"}'    # 导航
 python wb.py snapshot                                       # 页面无障碍树
 python wb.py screenshot                                     # 截图
 python wb.py evaluate '<json>'                              # 执行 JS

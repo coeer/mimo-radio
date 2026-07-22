@@ -235,7 +235,7 @@ DJ 串词文本 → MiMo TTS API → MP3 → 前端播放
 - 将音乐推送到音响播放
 - 支持播放/暂停/音量控制
 
-**库**: `node-ssdp` + `upnp-device-client`
+**库**: ~~`node-ssdp` + `upnp-device-client`~~（UPnP 已下线 2026-07-18，依赖已删）
 
 ---
 
@@ -337,7 +337,7 @@ interface UserProfile {
 
 ```
 # 服务器
-PORT=8000
+PORT=8001
 NODE_ENV=development
 
 # Claude / OpenAI
@@ -362,7 +362,7 @@ OPENWEATHER_CITY=Beijing
 # 后端
 cd backend
 npm install
-npm run dev        # localhost:8000
+npm run dev        # localhost:8001
 
 # 前端
 cd frontend
