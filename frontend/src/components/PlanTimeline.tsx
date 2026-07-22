@@ -48,7 +48,6 @@ function PlanTimelineImpl({ schedule, loading }: PlanTimelineProps) {
   const isPlaying = useRadioStore((s) => s.isPlaying)
   const setCurrentSong = useRadioStore((s) => s.setCurrentSong)
   const setDuration = useRadioStore((s) => s.setDuration)
-  const setIsPlaying = useRadioStore((s) => s.setIsPlaying)
 
   const currentSlotIdx = useMemo(
     () => (schedule?.slots ? findCurrentSlotIndex(schedule.slots) : -1),
@@ -59,7 +58,8 @@ function PlanTimelineImpl({ schedule, loading }: PlanTimelineProps) {
   const handlePlaySong = (song: Song) => {
     setCurrentSong(song)
     setDuration(song.duration || 180)
-    setIsPlaying(true)
+    // F4（2026-07-22）：用户点歌 → playRequest('play','user')，R1 用户优先
+    useRadioStore.getState().playRequest('play', 'user')
   }
 
   if (loading) {

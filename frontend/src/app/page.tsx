@@ -95,13 +95,15 @@ export default function Home() {
     // 优先开场白：仅在歌曲尚未开始播放时
     if (s.introScript && !s.introPlayed && !s.isSpeaking && !s.isPlaying) {
       s.setIntroPlayed(true)
-      s.setIsPlaying(false)   // P1 修复：双保险，确保歌曲在 DJ 开场白前不响
+      // F4（2026-07-22）：双保险改走 playRequest('pause','dj')，仲裁层统一处理
+      s.playRequest('pause', 'dj')
       speakAIMessage(s.introScript)
       return
     }
     // 无开场白（或已播完/已在播歌）且有歌未播、未在说话 → 放歌
     if ((!s.introScript || s.introPlayed) && s.currentSong && !s.isPlaying && !s.isSpeaking) {
-      s.setIsPlaying(true)
+      // F4（2026-07-22）：unlockAudio 由用户手势触发 → playRequest('play','user')
+      s.playRequest('play', 'user')
     }
   }, [audioUnlocked, introScript, introPlayed, speakAIMessage])
 

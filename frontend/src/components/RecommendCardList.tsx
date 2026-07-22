@@ -16,7 +16,6 @@ interface Props {
  */
 function RecommendCardList({ songs }: Props) {
   const setCurrentSong = useRadioStore((s) => s.setCurrentSong)
-  const setIsPlaying = useRadioStore((s) => s.setIsPlaying)
   const setDuration = useRadioStore((s) => s.setDuration)
   const currentSong = useRadioStore((s) => s.currentSong)
 
@@ -39,7 +38,8 @@ function RecommendCardList({ songs }: Props) {
     }
     setCurrentSong(track)
     setDuration(180)
-    setIsPlaying(true)
+    // F4（2026-07-22）：用户点推荐卡 → playRequest('play','user')，R1 用户优先
+    useRadioStore.getState().playRequest('play', 'user')
   }
 
   if (!songs || songs.length === 0) return null

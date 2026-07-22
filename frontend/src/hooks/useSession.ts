@@ -25,8 +25,15 @@ export function useSession() {
       const s = useRadioStore.getState()
       s.setSpeaking(false)
       s.setAiCurrentTime(0)
-      if (s.currentSong && !s.isPlaying) {
-        s.setIsPlaying(true)
+      // F4（2026-07-22）：唯一消费 pendingResume 的出口——setSpeaking(false) 后
+      // playRequest('play','dj') 自动消化 pendingResume 标记（isSpeaking 已 false，
+      // 但若之前有 pendingResume=true，应恢复播放）。
+      // 注意：playRequest 在 isSpeaking=true 时挂起 play 请求为 pendingResume，
+      // 但此函数已经在 setSpeaking(false) 之后调用，isSpeaking=false → 走普通路径。
+      // 若用户已在 speaking 中点了推荐卡（R1 用户优先，isPlaying=true），
+      // playRequest('play','dj') R5 幂等 → no-op，不会覆盖用户意图。
+      if (s.currentSong) {
+        s.playRequest('play', 'dj')
       }
     }
     setHandlers({
@@ -181,7 +188,8 @@ export function useSession() {
           s.setCurrentSong(song)
           s.setDuration(song.duration || 180)
           if (!djEnabled || !data.reply) {
-            s.setIsPlaying(true)
+            // F4（2026-07-22）：chat 推歌无 DJ 回复 → auto 来源
+            s.playRequest('play', 'auto')
           }
         }
         return true

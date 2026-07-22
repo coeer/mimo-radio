@@ -19,7 +19,8 @@ const QueueList = memo(function QueueList() {
     const state = useRadioStore.getState()
     state.setCurrentSong(song)
     state.setCurrentTime(0)
-    state.setIsPlaying(true)
+    // F4（2026-07-22）：用户队列点歌 → playRequest('play','user')，R1 用户优先
+    state.playRequest('play', 'user')
   }
 
   return (

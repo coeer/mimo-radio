@@ -128,7 +128,8 @@ export function useAudioPlayer() {
             text: '请点击页面以启用音频播放',
             timestamp: 0,
           })
-          s.setIsPlaying(false)
+          // F4（2026-07-22）：autoplay 被拒是唯一 source='system' 的 pause 路径
+          s.playRequest('pause', 'system')
         }
       })
     } else {

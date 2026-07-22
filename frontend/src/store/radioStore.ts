@@ -20,9 +20,16 @@ interface PlayerSlice {
   likedSongIds: string[]
   /** 音量 0~1（HTMLMediaElement.volume 标准）。跨组件共享，KimiCard 显示/控制，useAudioPlayer 应用到 audio.volume */
   volume: number
+  // F4 仲裁层：DJ 解说期间非 user 的 play 请求挂起为 pendingResume，唯一出口（resumePlaybackAfterSpeak）消费
+  pendingResume: boolean
   setCurrentSong: (song: Song | null) => void
   setQueue: (queue: Song[]) => void
   togglePlay: () => void
+  /**
+   * ⚠️ 私有 setter——F4 仲裁层要求所有 isPlaying 直写走 playRequest。
+   * 组件代码禁止直接调此函数（新代码用 playRequest）。
+   * 仅保留供：① store 内部仲裁规则实现 ② 旧测试断言状态 ③ 紧急修复路径。
+   */
   setIsPlaying: (playing: boolean) => void
   setCurrentTime: (time: number | ((prev: number) => number)) => void
   setDuration: (duration: number) => void
@@ -96,11 +103,24 @@ interface StatusSlice {
   setIsTransitioning: (v: boolean) => void
 }
 
+export type PlaySource = 'user' | 'dj' | 'auto' | 'system'
+export type PlayAction = 'play' | 'pause' | 'toggle'
+
 interface RadioActions {
   nextSong: () => Promise<void>
   prevSong: () => void
   /** 重置会话与播放状态到引导态（切音源、登出等场景，不清偏好设置） */
   clearSession: () => void
+  /**
+   * F4 仲裁层：唯一 isPlaying 写入口。组件/hook 直写全部走此 API。
+   * 规则（plan-f4-isplaying-arbiter-2026-07-18-KIMI.md §2.2）：
+   *   R1 用户优先：source='user' 立即生效，清除 pendingResume
+   *   R2 transition 锁：isTransitioning=true 时 user 生效；dj/auto 丢弃
+   *   R3 speaking 锁：isSpeaking=true 时非 user play 挂起为 pendingResume，pause 立即生效
+   *   R4 autoplay 回落：useAudioPlayer 的 NotAllowedError 是唯一 source='system' 的 pause
+   *   R5 幂等：结果与当前 isPlaying 相同 → no-op
+   */
+  playRequest: (action: PlayAction, source: PlaySource) => void
 }
 
 type RadioState = PlayerSlice & SessionSlice & ChatSlice & StatusSlice & RadioActions
@@ -125,9 +145,10 @@ const createPlayerSlice: StateCreator<
   isFullscreenPlayer: false,
   likedSongIds: [],
   volume: 0.8,
+  pendingResume: false,
   setCurrentSong: (song) => set({ currentSong: song }, false, 'player/setCurrentSong'),
   setQueue: (queue) => set({ queue }, false, 'player/setQueue'),
-  togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying }), false, 'player/togglePlay'),
+  togglePlay: () => get().playRequest('toggle', 'user'),
   setIsPlaying: (playing) => set({ isPlaying: playing }, false, 'player/setIsPlaying'),
   setCurrentTime: (time) =>
     set(
@@ -249,13 +270,55 @@ const createRadioActionsSlice: StateCreator<
   [],
   RadioActions
 > = (_set, get) => ({
+  /**
+   * F4 仲裁层实现（plan-f4-isplaying-arbiter-2026-07-18-KIMI.md §2.2）。
+   * 五条规则 + toggle 语义。
+   *
+   * 不读 setIsPlaying（私有 setter）——直接 set({ isPlaying })，本函数是 setIsPlaying
+   * 的唯一调用者（除测试 / 紧急修复路径），store 内部仲裁规则不应再调私有 setter。
+   */
+  playRequest: (action, source) => {
+    const s = get()
+    let nextPlaying: boolean
+    if (action === 'play') nextPlaying = true
+    else if (action === 'pause') nextPlaying = false
+    else nextPlaying = !s.isPlaying  // toggle
+
+    // R5 幂等：结果与当前相同 → no-op
+    if (nextPlaying === s.isPlaying) return
+
+    // R1 用户优先：source='user' 立即生效，并清除 pendingResume
+    if (source === 'user') {
+      _set({ isPlaying: nextPlaying, pendingResume: false }, false, 'player/playRequest/user')
+      return
+    }
+
+    // R2 transition 锁：isTransitioning=true 时 dj/auto 请求丢弃
+    //    （不排队——排队的旧意图在新歌上执行就是"旧歌复活"，规格 §一第三条竞态实例）
+    if (s.isTransitioning) {
+      if (process.env.NODE_ENV !== 'production') {
+        logger.warn('[playRequest] dropped during transition', { action, source })
+      }
+      return
+    }
+
+    // R3 speaking 锁：isSpeaking=true 时非 user 的 play 挂起为 pendingResume
+    if (s.isSpeaking && nextPlaying) {
+      _set({ pendingResume: true }, false, 'player/playRequest/pendingResume')
+      return
+    }
+
+    // 普通路径：直接置位（R4 system pause 也走此分支，因为 pause + 非 speaking）
+    _set({ isPlaying: nextPlaying }, false, 'player/playRequest')
+  },
   prevSong: () => {
     const { queue, currentSong } = get()
     const currentIndex = queue.findIndex((s) => s.id === currentSong?.id)
     const prev = queue[currentIndex - 1]
-    if (prev) {
-      _set({ currentSong: prev, currentTime: 0, isPlaying: true }, false, 'radio/prevSong')
-    }
+    if (!prev) return
+    // F4 §3.1 两阶段：阶段 1 只切歌（不动 isPlaying），阶段 2 经 playRequest 仲裁
+    _set({ currentSong: prev, currentTime: 0 }, false, 'radio/prevSong')
+    get().playRequest('play', 'user')
   },
   nextSong: async () => {
     const { sessionId, sessionToken, isTransitioning } = get()
@@ -277,17 +340,18 @@ const createRadioActionsSlice: StateCreator<
           const data = await res.json()
 
           if (data.song) {
-            // Batch all state updates into a single setState call
             const { queue, addMessage } = get()
+            // F4 §3.1 两阶段：阶段 1 只切歌（不动 isPlaying），阶段 2 经 playRequest('play','auto') 仲裁
             const updates: Partial<RadioState> = {
               currentSong: data.song,
               currentTime: 0,
-              isPlaying: true,
             }
             if (!queue.find((s) => s.id === data.song.id)) {
               updates.queue = [...queue, data.song]
             }
             _set(updates, false, 'radio/nextSong')
+            // 阶段 2：仲裁决定是否播放（auto 源）
+            get().playRequest('play', 'auto')
 
             if (data.transition) {
               addMessage({ sender: 'kimi', text: data.transition, timestamp: 0 })
@@ -302,11 +366,9 @@ const createRadioActionsSlice: StateCreator<
           const currentIndex = queue.findIndex((s) => s.id === currentSong?.id)
           const next = queue[currentIndex + 1]
           if (next) {
-            _set(
-              { currentSong: next, currentTime: 0, isPlaying: true },
-              false,
-              'radio/nextSong/fallback',
-            )
+            // F4 §3.1：fallback 路径同样两阶段
+            _set({ currentSong: next, currentTime: 0 }, false, 'radio/nextSong/fallback')
+            get().playRequest('play', 'auto')
           }
         }
       } else {
@@ -314,11 +376,9 @@ const createRadioActionsSlice: StateCreator<
         const currentIndex = queue.findIndex((s) => s.id === currentSong?.id)
         const next = queue[currentIndex + 1]
         if (next) {
-          _set(
-            { currentSong: next, currentTime: 0 },
-            false,
-            'radio/nextSong/local',
-          )
+          // F4 §3.1：本地路径同样两阶段
+          _set({ currentSong: next, currentTime: 0 }, false, 'radio/nextSong/local')
+          get().playRequest('play', 'auto')
         }
       }
     } finally {
@@ -342,6 +402,7 @@ const createRadioActionsSlice: StateCreator<
         introScript: null,
         introPlayed: false,
         pendingTtsText: null,
+        pendingResume: false,
         // 保留 likedSongIds（用户长期偏好，不因切音源丢失）
         // 保留 messages（聊天历史，createSession 会主动 clearMessages 开新会话）
       },
