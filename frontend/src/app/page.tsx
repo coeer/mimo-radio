@@ -144,7 +144,7 @@ export default function Home() {
     if (!inputText.trim() || isCreating) return
     const text = inputText.trim()
     const s = useRadioStore.getState()
-    s.addMessage({ sender: 'user', text, timestamp: 0 })
+    s.addMessage({ sender: 'user', text, timestamp: Date.now() })
     setInputText('')
 
     if (sessionId) {

@@ -354,7 +354,7 @@ const createRadioActionsSlice: StateCreator<
             get().playRequest('play', 'auto')
 
             if (data.transition) {
-              addMessage({ sender: 'kimi', text: data.transition, timestamp: 0 })
+              addMessage({ sender: 'kimi', text: data.transition, timestamp: Date.now() })
               // P2 修复：先停止当前 TTS，再触发新 transition 播报
               get().setPendingTtsStop()
               get().setPendingTtsText(data.transition)

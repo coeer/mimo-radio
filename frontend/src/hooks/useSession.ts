@@ -116,7 +116,7 @@ export function useSession() {
           s.addMessage({
             sender: 'kimi',
             text: data.intro_script,
-            timestamp: 0,
+            timestamp: Date.now(),
           })
           if (djEnabled) {
             // 不立即播 TTS（会被自动播放策略拦截）。
@@ -133,7 +133,7 @@ export function useSession() {
         s.addMessage({
           sender: 'kimi',
           text: '抱歉，电台启动失败了，请检查后端服务。',
-          timestamp: 0,
+          timestamp: Date.now(),
         })
         return false
       } finally {
@@ -159,7 +159,7 @@ export function useSession() {
       s.setIsCreating(true)
       // P2：生成 pending id，传给 addMessage，后续按 id 精确替换（不再用"最后一条 kimi"模糊匹配）
       const pendingId = crypto.randomUUID()
-      s.addMessage({ id: pendingId, sender: 'kimi', text: '', timestamp: 0, isPending: true })
+      s.addMessage({ id: pendingId, sender: 'kimi', text: '', timestamp: Date.now(), isPending: true })
       try {
         const res = await fetch(`${API_BASE}/api/v1/radio/${sid}/chat`, {
           method: 'POST',

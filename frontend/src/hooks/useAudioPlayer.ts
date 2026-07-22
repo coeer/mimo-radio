@@ -77,7 +77,7 @@ export function useAudioPlayer() {
             s.addMessage({
               sender: 'kimi',
               text: '该曲目暂无法播放，已自动跳过',
-              timestamp: 0,
+              timestamp: Date.now(),
             })
             nextSong().catch((e) => logger.error('Auto-skip nextSong failed', { error: e instanceof Error ? e.message : String(e) }))
             return
@@ -126,7 +126,7 @@ export function useAudioPlayer() {
           s.addMessage({
             sender: 'kimi',
             text: '请点击页面以启用音频播放',
-            timestamp: 0,
+            timestamp: Date.now(),
           })
           // F4（2026-07-22）：autoplay 被拒是唯一 source='system' 的 pause 路径
           s.playRequest('pause', 'system')
