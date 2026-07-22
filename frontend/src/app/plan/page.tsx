@@ -60,6 +60,9 @@ export default function PlanPage() {
   const [regenerating, setRegenerating] = useState(false)
   // S1 修复：轮询计数，防止 tracksLoaded 无限重试
   const retryCountRef = useRef(0)
+  // B2-3 (2026-07-18)：自动重试 setTimeout 存 id + unmount cleanup。
+  // 铁律1（资源成对）：新 setTimeout 前清旧，unmount 时清当前。
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /** 内部 fetch 逻辑（不重置计数），isAutoRetry=true 时不重置计数器 */
   const doFetch = useCallback(async (isAutoRetry: boolean): Promise<void> => {
@@ -96,7 +99,9 @@ export default function PlanPage() {
     // tracksLoaded=false：2s 后自动重试（受 retryCount 上限保护，避免无限循环）
     if (data.tracksLoaded === false && retryCountRef.current < MAX_RETRIES) {
       retryCountRef.current += 1
-      setTimeout(() => doFetch(true), 2000)
+      // 铁律1：清旧 timer 后再 set 新 timer
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = setTimeout(() => doFetch(true), 2000)
     }
   }, [])
 
@@ -114,6 +119,13 @@ export default function PlanPage() {
   useEffect(() => {
     loadSchedule()
   }, [loadSchedule])
+
+  // B2-3：组件 unmount 时清理重试 timer，防止 setState 已卸载组件
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    }
+  }, [])
 
   const handleRegenerate = useCallback(async () => {
     if (regenerating) return

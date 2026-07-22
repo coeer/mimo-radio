@@ -7,15 +7,16 @@ import { logger } from '../utils/logger'
  * Extracts and verifies signed session tokens from:
  *   - Header: X-Session-Token
  *   - Body field: session_token
- *   - Query param: session_token
+ *
+ * Query param removed 2026-07-18 (B2-1 / B1-1): token in URL leaks via
+ * access log / browser history / Referer / proxy log.
  *
  * Attaches `req.sessionId` on success.
  */
 export function sessionAuth(req: Request, res: Response, next: NextFunction) {
   const token =
     (req.headers['x-session-token'] as string) ||
-    req.body?.session_token ||
-    req.query?.session_token
+    req.body?.session_token
 
   if (!token || typeof token !== 'string') {
     logger.warn('Session auth failed', { requestId: req.requestId, path: req.path, reason: 'missing_session' })

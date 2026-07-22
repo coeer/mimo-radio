@@ -61,7 +61,9 @@ describe('sessionAuth', () => {
     expect(next).toHaveBeenCalledOnce()
   })
 
-  it('should extract token from query session_token param', () => {
+  it('should reject token from query session_token param (URL leak prevention)', () => {
+    // B2-1 (2026-07-18)：query 传 token 被移除——token 走 URL 会进 access log/browser
+    // history/Referer/proxy log 被动泄漏。前端零引用 query 传参。
     mockVerify.mockReturnValue({ valid: true, sessionId: 'session-789' })
 
     const { req, res, next } = createMockReqRes({
@@ -70,8 +72,15 @@ describe('sessionAuth', () => {
 
     sessionAuth(req, res, next)
 
-    expect(mockVerify).toHaveBeenCalledWith('session-789.signature')
-    expect(next).toHaveBeenCalledOnce()
+    expect(mockVerify).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
+    expect((res as any).status).toHaveBeenCalledWith(401)
+    expect((res as any).json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ code: 'SESSION_REQUIRED' }),
+      })
+    )
   })
 
   it('should return 401 when no token is provided', () => {

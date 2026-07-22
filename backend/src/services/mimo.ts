@@ -137,7 +137,7 @@ ${sanitizePromptInput(userInput)}
       if (!jsonText) throw new Error('no JSON object found')
       const json = JSON.parse(jsonText)
       return {
-        mood: typeof json.mood === 'string' ? json.mood : userInput,
+        mood: typeof json.mood === 'string' ? json.mood : '随机',
         genres: Array.isArray(json.genres) ? json.genres : [],
         energy: ['high', 'medium', 'low'].includes(json.energy) ? json.energy : 'medium',
         reason: typeof json.reason === 'string' ? json.reason : response.slice(0, 50),
