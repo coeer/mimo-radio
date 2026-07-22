@@ -1,4 +1,6 @@
 import { URL } from 'url'
+import { lookup } from 'dns/promises'
+import { isIP } from 'net'
 
 const PRIVATE_IP_PATTERNS = [
   /^127\./,
@@ -8,8 +10,13 @@ const PRIVATE_IP_PATTERNS = [
   /^0\./,
   /^169\.254\./,
   /^::1$/,
-  /^fc00:/i,
+  // IPv6 ULA（fc00::/7）= fc00-fdff 开头
+  /^[fF][cCdD][0-9a-fA-F]{2}:/,
   /^fe80:/i,
+  // IPv4-mapped IPv6（::ffff:127.0.0.1 → 绕过 v4 规则）
+  /^::ffff:/i,
+  // IPv6 6to4（2002: 开头，可能映射私网）—— 保守拦截
+  /^2002:/i,
 ]
 
 /**
@@ -49,10 +56,46 @@ export const SSRF_ALLOW_HOST_PORTS = new Map<string, Set<number>>([
 ])
 
 /**
- * Validate a URL to prevent SSRF attacks.
- * Allows only http/https protocols and rejects private/internal IPs.
+ * 去除 IPv6 字面量的方括号 [::1] → ::1，让 PRIVATE_IP_PATTERNS 匹配。
+ * Node URL 对 IPv6 literal 返回的 hostname 带方括号，原正则不匹配。
  */
-export function isSafeUrl(urlString: string): { safe: true } | { safe: false; reason: string } {
+function stripIpv6Brackets(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1)
+  }
+  return hostname
+}
+
+/**
+ * 判断一个 IP 字符串（v4 或 v6）是否在私有/保留范围内。
+ * PRIVATE_IP_PATTERNS 同时覆盖 v4 和 v6 literal；IPv4-mapped IPv6
+ *（::ffff:127.0.0.1）走 ::ffff: 规则匹配。
+ */
+function isPrivateAddress(addr: string): boolean {
+  const lower = addr.toLowerCase()
+  // IPv4-mapped IPv6（::ffff:127.0.0.1）→ 用 ::ffff: 规则匹配
+  return PRIVATE_IP_PATTERNS.some((p) => p.test(lower))
+}
+
+/**
+ * Validate a URL to prevent SSRF attacks.
+ *
+ * Async because we resolve the hostname via dns.lookup to detect
+ * DNS rebinding (public domain resolving to private IP).
+ *
+ * 流：
+ *   1. 协议 + localhost + 字面 IP 同步检查（前置过滤明显非法）
+ *   2. 仅当 hostname 看起来是域名（不是 IP 字面量）才 DNS 解析
+ *   3. DNS 解析失败 → fail-closed（视为 unsafe）
+ *   4. 解析到私网 IP → unsafe
+ *
+ * 注意：白名单**不**在这里查——白名单查询在 fetchWithTimeout（调方），
+ * 命中白名单的 host 会绕过本函数（包括 DNS 解析）。这是设计：白名单 =
+ * "我信这个域名，不做 DNS rebinding 校验"。
+ */
+export async function isSafeUrl(
+  urlString: string,
+): Promise<{ safe: true } | { safe: false; reason: string }> {
   let parsed: URL
   try {
     parsed = new URL(urlString)
@@ -66,17 +109,36 @@ export function isSafeUrl(urlString: string): { safe: true } | { safe: false; re
   }
 
   // Hostname check (reject IP addresses and localhost variants)
-  const hostname = parsed.hostname.toLowerCase()
+  const rawHostname = parsed.hostname.toLowerCase()
+  // IPv6 字面量 Node URL 返回带方括号 [::1]，正则去方括号后匹配
+  const hostname = stripIpv6Brackets(rawHostname)
 
   // Block localhost names
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return { safe: false, reason: 'localhost is not allowed' }
   }
 
-  // Block private IP ranges
-  for (const pattern of PRIVATE_IP_PATTERNS) {
-    if (pattern.test(hostname)) {
-      return { safe: false, reason: 'private/internal IP addresses are not allowed' }
+  // Block private IP ranges（IP 字面量直接正则匹配）
+  if (PRIVATE_IP_PATTERNS.some((p) => p.test(hostname))) {
+    return { safe: false, reason: 'private/internal IP addresses are not allowed' }
+  }
+
+  // DNS 解析校验：防 rebinding（域名形态才查，IP 字面量已上一步覆盖）
+  if (!isIP(hostname)) {
+    try {
+      const results = await lookup(hostname, { all: true })
+      // 任一解析结果是私网 IP → 拒绝（fail-closed）
+      for (const r of results) {
+        if (isPrivateAddress(r.address)) {
+          return {
+            safe: false,
+            reason: `hostname resolves to private IP ${r.address}`,
+          }
+        }
+      }
+    } catch {
+      // DNS 解析失败 → fail-closed
+      return { safe: false, reason: 'DNS resolution failed' }
     }
   }
 

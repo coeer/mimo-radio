@@ -75,23 +75,39 @@ export async function fetchWithTimeout(
   //   1. SSRF_ALLOW_HOST_PORTS（严格，host+port 都匹配才放行）——用于本地服务
   //   2. SSRF_ALLOW_HOSTS（宽松，host 匹配即放行）——用于外部可信域名
   // 防止未来用户可控 URL 经此工具打到内网元数据服务等。
+  //
+  // 流程（白名单优先）：
+  //   1. 端口级白名单 → 命中直接放行（不进 isSafeUrl）
+  //   2. host 白名单 → 命中直接放行（不进 isSafeUrl）
+  //   3. 都不命中 → 调 isSafeUrl（含 DNS rebinding 校验）
+  //
+  // 设计：白名单命中绕过 DNS 解析校验，因白名单是"我信这个域名"。
   const { hostname, port } = getHostPort(url)
   const host = hostname  // circuit breaker 按 hostname 统计
-  const ssrfCheck = isSafeUrl(url)
-  if (!ssrfCheck.safe) {
-    // 端口级白名单优先检查
-    if (SSRF_ALLOW_HOST_PORTS.has(hostname)) {
-      const allowedPorts = SSRF_ALLOW_HOST_PORTS.get(hostname)!
-      const portNum = port ? parseInt(port, 10) : (url.startsWith('https') ? 443 : 80)
-      if (!allowedPorts.has(portNum)) {
-        logger.warn('SSRF guard blocked request (port not allowed)', { hostname, port: portNum, allowedPorts: [...allowedPorts] })
-        throw new Error(`Blocked by SSRF guard: port ${portNum} not allowed for ${hostname}`)
-      }
-    } else if (!SSRF_ALLOW_HOSTS.has(hostname)) {
+
+  // 第一道：端口级白名单（127.0.0.1:10086 webbridge 等本地合法服务）
+  if (SSRF_ALLOW_HOST_PORTS.has(hostname)) {
+    const allowedPorts = SSRF_ALLOW_HOST_PORTS.get(hostname)!
+    const portNum = port ? parseInt(port, 10) : url.startsWith('https') ? 443 : 80
+    if (!allowedPorts.has(portNum)) {
+      logger.warn('SSRF guard blocked request (port not allowed)', {
+        hostname,
+        port: portNum,
+        allowedPorts: [...allowedPorts],
+      })
+      throw new Error(`Blocked by SSRF guard: port ${portNum} not allowed for ${hostname}`)
+    }
+    // 端口白名单命中 → 直接放行，跳过 isSafeUrl
+  } else if (SSRF_ALLOW_HOSTS.has(hostname)) {
+    // 第二道：host 白名单（外部可信域名，绕过 DNS rebinding 校验）
+    // 此分支无需日志
+  } else {
+    // 第三道：默认走 isSafeUrl（含 DNS 解析校验，防 rebinding）
+    const ssrfCheck = await isSafeUrl(url)
+    if (!ssrfCheck.safe) {
       logger.warn('SSRF guard blocked request', { host: hostname, reason: ssrfCheck.reason })
       throw new Error(`Blocked by SSRF guard: ${ssrfCheck.reason} (${hostname})`)
     }
-    // 命中任一层白名单则放行
   }
 
   const circuit = getCircuit(host)

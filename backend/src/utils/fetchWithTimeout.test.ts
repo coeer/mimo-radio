@@ -1,14 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { lookup } from 'dns/promises'
 import { fetchWithTimeout, readBodySafely } from './fetchWithTimeout'
+
+// dns/promises.lookup mock：测试用的 *.example 假域名需要解析为公网 IP，
+// 否则 isSafeUrl 的 DNS 解析校验（fail-closed）会拦下所有请求。
+vi.mock('dns/promises', () => ({
+  lookup: vi.fn(),
+}))
+
+const mockLookup = vi.mocked(lookup)
 
 describe('fetchWithTimeout', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    // 默认：所有域名解析为公网 IP（93.184.216.34 = example.com 真实 IP）
+    mockLookup.mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ] as never)
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+    vi.clearAllMocks()
   })
 
   it('should call fetch with the provided URL and options', async () => {
