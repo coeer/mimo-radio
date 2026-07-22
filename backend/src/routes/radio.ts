@@ -155,14 +155,14 @@ router.post('/create', aiLimiter, validateBody(createSchema), async (req, res, n
           id: randomUUID(),
           sender: 'kimi',
           text: intro,
-          timestamp: 0,
+          timestamp: Date.now(),
         })
       } catch {
         session.messages.push({
           id: randomUUID(),
           sender: 'kimi',
           text: effectiveMood ? `你好，我为你准备了一些${effectiveMood}氛围的音乐。` : '你好，欢迎收听 MiMo 电台。',
-          timestamp: 0,
+          timestamp: Date.now(),
         })
       }
     }
@@ -237,14 +237,14 @@ ${dislikedArtistsForTransition.length > 0 ? `用户跳过的歌手：${dislikedA
           id: randomUUID(),
           sender: 'kimi',
           text: transition.text,
-          timestamp: 0,
+          timestamp: Date.now(),
         })
       } catch {
         session.messages.push({
           id: randomUUID(),
           sender: 'kimi',
           text: `接下来是 ${next.artist} 的《${next.title}》。`,
-          timestamp: 0,
+          timestamp: Date.now(),
         })
       }
     }
@@ -285,7 +285,7 @@ router.post('/:id/chat', aiLimiter, sessionAuth, validateBody(chatSchema), async
       id: randomUUID(),
       sender: 'user',
       text: sanitizedText,
-      timestamp: 0,
+      timestamp: Date.now(),
     })
 
     // Build conversation history for AI
@@ -397,7 +397,8 @@ router.post('/:id/chat', aiLimiter, sessionAuth, validateBody(chatSchema), async
 【推荐数量规则】不要在回复中声明具体的推荐数量（如"5首""三首"）。如果需要提及，用模糊表达如"挑了几首""找了些歌"代替具体数字，因为实际可播数量取决于曲库。`
 
 	    // Wrap user input in isolated delimiters to prevent prompt injection
-	    const wrappedInput = sanitizePromptInput(text)
+	    // B2-4 (2026-07-22)：复用 L281 的 sanitizedText，避免对同一 text 二次 sanitize
+	    const wrappedInput = sanitizedText
 
 	    const messages = [
 	      { role: 'system' as const, content: systemPrompt },
@@ -415,11 +416,11 @@ router.post('/:id/chat', aiLimiter, sessionAuth, validateBody(chatSchema), async
 
 	    // Save AI reply
 	    session.messages.push({
-	      id: randomUUID(),
-	      sender: 'kimi',
-	      text: reply,
-	      timestamp: 0,
-	    })
+		      id: randomUUID(),
+		      sender: 'kimi',
+		      text: reply,
+		      timestamp: Date.now(),
+		    })
 
 	    // 6. 兜底：如果规则识别为 chat 但用户其实想点歌（AI 输出了标签）
 	    //    保留旧的标签解析作为安全网

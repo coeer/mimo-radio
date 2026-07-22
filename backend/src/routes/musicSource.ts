@@ -46,7 +46,13 @@ router.post('/play-url', validateBody(playUrlSchema), async (req, res, next) => 
     if (url) {
       res.json({ url })
     } else {
-      res.status(404).json({ error: '无法获取播放URL（请确保浏览器已登录QQ音乐并打开播放器页）' })
+      res.status(404).json({
+        success: false,
+        error: {
+          message: '无法获取播放URL（请确保浏览器已登录QQ音乐并打开播放器页）',
+          code: 'PLAYBACK_UNAVAILABLE',
+        },
+      })
     }
   } catch (err) {
     next(err)
@@ -62,7 +68,10 @@ router.post('/switch', validateBody(switchSchema), async (req, res, next) => {
       // 临时检查 qq（先切过去才能查）—— 实际：直接试切，再验就绪
       const ok = setCurrentSourceId(id)
       if (!ok) {
-        res.status(400).json({ error: '未知音源' })
+        res.status(400).json({
+          success: false,
+          error: { message: '未知音源', code: 'UNKNOWN_SOURCE' },
+        })
         return
       }
       const newSource = getMusicSource()
@@ -71,7 +80,11 @@ router.post('/switch', validateBody(switchSchema), async (req, res, next) => {
         // 不就绪，回退到网易云并提示
         setCurrentSourceId('netease')
         res.status(400).json({
-          error: 'QQ 音源未就绪：请确保浏览器已登录 y.qq.com 并打开播放器页，webbridge 在运行',
+          success: false,
+          error: {
+            message: 'QQ 音源未就绪：请确保浏览器已登录 y.qq.com 并打开播放器页，webbridge 在运行',
+            code: 'SOURCE_NOT_READY',
+          },
           switchedTo: 'netease',
         })
         return
@@ -80,7 +93,10 @@ router.post('/switch', validateBody(switchSchema), async (req, res, next) => {
     } else {
       const ok = setCurrentSourceId(id)
       if (!ok) {
-        res.status(400).json({ error: '未知音源' })
+        res.status(400).json({
+          success: false,
+          error: { message: '未知音源', code: 'UNKNOWN_SOURCE' },
+        })
         return
       }
       res.json({ switched: id })

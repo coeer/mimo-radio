@@ -1,7 +1,13 @@
 import { resolve } from 'path'
 import { config } from './config'
 import { createApp } from './app'
-import { initDb, startSessionCleanup } from './db'
+import {
+  initDb,
+  startSessionCleanup,
+  stopSessionCleanup,
+  startFeedbackCleanup,
+  stopFeedbackCleanup,
+} from './db'
 import { logger, cleanupOldLogs, toErrorMeta } from './utils/logger'
 import { assertSecretConfigured } from './utils/sessionToken'
 import { startPeriodicCleanup } from './utils/fileCleanup'
@@ -50,6 +56,8 @@ setCurrentTtsEngine(config.ttsEngine)
 const PORT = config.port
 const server = app.listen(PORT, async () => {
   startSessionCleanup()
+  // B2-5 (2026-07-22)：feedback TTL 清理（90 天）
+  startFeedbackCleanup()
   startPeriodicCleanup(resolve(process.cwd(), 'static/audio'))
   logger.info('Server started', { port: PORT, env: config.nodeEnv })
   // 启动后清理过期日志（不阻塞服务）
@@ -100,3 +108,25 @@ process.on('unhandledRejection', (reason) => {
   logger.error('unhandledRejection, shutting down', { reason: String(reason) })
   process.exit(1)
 })
+
+// B2-5 (2026-07-22)：优雅退出钩子——停掉后台定时器（session cleanup / feedback cleanup），
+// 避免进程 hang 在 event loop 上不退。原代码只 process.exit(1)，未清理定时器。
+let shuttingDown = false
+function gracefulShutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  logger.info(`Received ${signal}, shutting down gracefully`)
+  stopSessionCleanup()
+  stopFeedbackCleanup()
+  server.close((err) => {
+    if (err) logger.error('Error closing server', { ...toErrorMeta(err) })
+    process.exit(0)
+  })
+  // 兜底：5 秒内未关完则强退
+  setTimeout(() => {
+    logger.warn('Graceful shutdown timeout, forcing exit')
+    process.exit(1)
+  }, 5000).unref()
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))

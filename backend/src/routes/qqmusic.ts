@@ -45,7 +45,10 @@ router.get('/url/:mid', validateParams(midParamSchema), async (req, res, next) =
     if (!url) {
       return res.status(404).json({
         success: false,
-        error: 'No playable URL found (may be VIP-only or unavailable)',
+        error: {
+          message: 'No playable URL found (may be VIP-only or unavailable)',
+          code: 'PLAYBACK_UNAVAILABLE',
+        },
         mid,
       })
     }
@@ -63,7 +66,11 @@ router.get('/lyric/:mid', validateParams(midParamSchema), async (req, res, next)
     const { mid } = req.params
     const lyric = await qqMusicService.getLyric(mid)
     if (!lyric) {
-      return res.status(404).json({ success: false, error: 'Lyric not found', mid })
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Lyric not found', code: 'NOT_FOUND' },
+        mid,
+      })
     }
     res.json({ success: true, mid, ...lyric })
   } catch (err) {
@@ -79,7 +86,11 @@ router.get('/detail/:mid', validateParams(midParamSchema), async (req, res, next
     const { mid } = req.params
     const detail = await qqMusicService.getSongDetail(mid)
     if (!detail) {
-      return res.status(404).json({ success: false, error: 'Song not found', mid })
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Song not found', code: 'NOT_FOUND' },
+        mid,
+      })
     }
     res.json({ success: true, mid, detail })
   } catch (err) {

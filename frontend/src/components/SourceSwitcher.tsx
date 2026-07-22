@@ -49,7 +49,13 @@ function SourceSwitcher() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || '切换失败')
+        // B2-6 适配（2026-07-22）：后端统一 error envelope 为 { message, code }，
+        // 兼容旧的 string 形态（防御纵深）
+        const errMsg =
+          typeof data.error === 'string'
+            ? data.error
+            : data.error?.message || '切换失败'
+        setError(errMsg)
       } else {
         setCurrent(id)
         // 切音源后重置会话到引导态（不清偏好设置）。

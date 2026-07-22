@@ -49,6 +49,9 @@ export function createApp(): Express {
     max: 200,
     standardHeaders: true,
     legacyHeaders: false,
+    // B2-1 (2026-07-22)：/health（监控系统高频心跳）和 /static（TTS 音频拉取）
+    // 不消耗限流配额。express-rate-limit v8 的 skip 返回 true 则不计数。
+    skip: (req) => req.path === '/health' || req.path.startsWith('/static'),
     message: { error: 'Too many requests, please try again later.' },
   })
 

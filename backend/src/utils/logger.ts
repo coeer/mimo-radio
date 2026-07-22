@@ -137,11 +137,15 @@ function formatLog(
   meta?: Record<string, unknown>
 ): string {
   const timestamp = new Date().toISOString()
+  // B2-2 (2026-07-22)：源头 sanitize 换行符，防日志行伪造。
+  // 攻击面：log.ts 接受前端 msg（最大 2000 字符），含 \n 可注入伪日志行。
+  // 在 formatLog 统一处理，所有 logger 调用点天然受保护（防御纵深 + 源头治理）。
+  const safeMessage = String(message).replace(/[\r\n]/g, ' ')
   if (config.nodeEnv === 'production') {
-    return JSON.stringify({ timestamp, level, message, ...meta })
+    return JSON.stringify({ timestamp, level, message: safeMessage, ...meta })
   }
   const metaStr = meta ? ' ' + JSON.stringify(meta) : ''
-  return `[${timestamp}] ${level}: ${message}${metaStr}`
+  return `[${timestamp}] ${level}: ${safeMessage}${metaStr}`
 }
 
 /** 统一输出：控制台 + 文件 */

@@ -9,6 +9,8 @@ const DB_PATH = join(DATA_DIR, 'mimo.db')
 
 // Session TTL: 24 hours
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000
+// Feedback TTL: 90 days（口味画像分析周期）
+const FEEDBACK_TTL_MS = 90 * 24 * 60 * 60 * 1000
 // Cleanup interval: 1 hour
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 
@@ -269,8 +271,47 @@ export function checkDbHealth(): boolean {
   }
 }
 
+// B2-5 (2026-07-22)：定时器引用 + stop 函数（铁律 1 资源成对 + ZCode 修订反模式修正）。
+// 原 startSessionCleanup 只有 setInterval 无 clearInterval / 无停止机制——进程退出时定时器
+// 仍在跑，可能让进程 hang 在 event loop 上不退。新代码保存 timer ref + 提供 stop。
+let sessionCleanupTimer: NodeJS.Timeout | null = null
+
 export function startSessionCleanup(): void {
   cleanupExpiredSessions()
-  setInterval(cleanupExpiredSessions, CLEANUP_INTERVAL_MS)
+  sessionCleanupTimer = setInterval(cleanupExpiredSessions, CLEANUP_INTERVAL_MS)
   logger.info('Session cleanup started', { ttlHours: 24 })
+}
+
+export function stopSessionCleanup(): void {
+  if (sessionCleanupTimer) {
+    clearInterval(sessionCleanupTimer)
+    sessionCleanupTimer = null
+  }
+}
+
+// ─── Feedback TTL & Cleanup ───
+
+function cleanupOldFeedback(): number {
+  const cutoff = new Date(Date.now() - FEEDBACK_TTL_MS).toISOString()
+  const result = getDb().prepare('DELETE FROM feedback WHERE created_at < ?').run(cutoff)
+  const removed = result.changes
+  if (removed > 0) {
+    logger.info(`Cleaned up ${removed} expired feedback entries`)
+  }
+  return removed
+}
+
+let feedbackCleanupTimer: NodeJS.Timeout | null = null
+
+export function startFeedbackCleanup(): void {
+  cleanupOldFeedback()
+  feedbackCleanupTimer = setInterval(cleanupOldFeedback, CLEANUP_INTERVAL_MS)
+  logger.info('Feedback cleanup started', { ttlDays: 90 })
+}
+
+export function stopFeedbackCleanup(): void {
+  if (feedbackCleanupTimer) {
+    clearInterval(feedbackCleanupTimer)
+    feedbackCleanupTimer = null
+  }
 }
