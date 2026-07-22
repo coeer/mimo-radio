@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useRef, useState, useCallback } from 'react'
+import React, { memo, useRef, useState, useCallback, useEffect } from 'react'
 import { useRadioStore } from '@/store/radioStore'
 import { API_BASE, getApiHeaders } from '@/lib/config'
 import { logger } from '@/lib/logger'
@@ -18,7 +18,35 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
   const [transcribing, setTranscribing] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  // B3-1 (2026-07-22)：stream 也存 ref，unmount cleanup 时才能释放 track
+  const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
+
+  // B3-1：mount/unmount 守卫——onstop 回调里的 setState 防卸载后 setState
+  // mountedRef mount=true，unmount 时 cleanup 置 false。回调内每次 setState 前 if (!mountedRef.current) return
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  // B3-1：unmount cleanup effect（铁律 1：注册与清理同 effect）
+  // 录音中跳页/卸载 → 主动停 MediaRecorder + 释放 audio track，避免泄漏与 onstop setState
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop()
+        } catch {
+          /* best effort */
+        }
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+  }, [])
 
   const handleMicClick = useCallback(async () => {
     // 正在录音 → 停止并识别
@@ -43,6 +71,12 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
     // 开始录音
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // 若中途已 unmount，getUserMedia 期间页面跳走了——立即清理并放弃
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+      streamRef.current = stream
       const mr = new MediaRecorder(stream)
       mediaRecorderRef.current = mr
       chunksRef.current = []
@@ -51,8 +85,11 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
       mr.onstop = async () => {
+        // B3-1：释放 track 仍在此处（onstop 是正常结束路径），unmount cleanup 兜底
         stream.getTracks().forEach((t) => t.stop())
+        if (streamRef.current === stream) streamRef.current = null
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
+        if (!mountedRef.current) return
         setRecording(false)
         if (blob.size === 0) return
 
@@ -79,6 +116,7 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
               if (!res.ok) throw new Error(`HTTP ${res.status}`)
               const data = await res.json()
               if (data.text) {
+                if (!mountedRef.current) return
                 setInputText(data.text)
                 // 不自动发送，让用户确认/编辑
               }
@@ -87,7 +125,7 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
                 error: err instanceof Error ? err.message : String(err),
               })
             } finally {
-              setTranscribing(false)
+              if (mountedRef.current) setTranscribing(false)
             }
           }
           reader.readAsDataURL(blob)
@@ -95,7 +133,7 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
           logger.warn('[ASR] read blob failed', {
             error: err instanceof Error ? err.message : String(err),
           })
-          setTranscribing(false)
+          if (mountedRef.current) setTranscribing(false)
         }
       }
 
@@ -105,7 +143,9 @@ const InputArea = memo(function InputArea({ inputText, setInputText, onSend, onK
       const msg = err instanceof DOMException && err.name === 'NotAllowedError'
         ? '麦克风权限被拒绝'
         : '麦克风不可用'
-      setMicError(msg)
+      if (mountedRef.current) {
+        setMicError(msg)
+      }
       logger.warn('[Mic] getUserMedia failed', {
         error: err instanceof Error ? err.message : String(err),
       })
