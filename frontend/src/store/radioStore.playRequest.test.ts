@@ -121,6 +121,24 @@ describe('F4 playRequest 仲裁层（场景 1-8）', () => {
     expect(after.isPlaying).toBe(true)
   })
 
+  // ─── N-5（深度 review 批次 4）：R2/R3 规则顺序锁定 ───
+  // isTransitioning 与 isSpeaking 同置时，R2（transition 丢弃）必须先于 R3（speaking 挂起）——
+  // 若顺序反了，auto play 会被挂起成 pendingResume 而不是丢弃，DJ 说完后在"换歌完成的新歌窗口"
+  // 之外消费一个 transition 期间的旧意图。本用例锁死该顺序：终态必须是丢弃（pendingResume=false）。
+  it('场景3b：transition+speaking 同置时 auto play → R2 丢弃（非 R3 挂起）', () => {
+    const s = useRadioStore.getState()
+    s.setCurrentSong(SONG)
+    s.setIsTransitioning(true)
+    s.setSpeaking(true)
+    s.setIsPlaying(false)
+
+    s.playRequest('play', 'auto')
+
+    const after = useRadioStore.getState()
+    expect(after.isPlaying).toBe(false)
+    expect(after.pendingResume).toBe(false)  // R2 先于 R3：丢弃而非挂起
+  })
+
   // ─── 场景 5：autoplay 被拒（system pause）───
   it('场景5：autoplay 被拒 → system pause 生效', () => {
     const s = useRadioStore.getState()

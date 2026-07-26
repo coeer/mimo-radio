@@ -116,5 +116,38 @@ describe('fetchWithTimeout', () => {
       const value = await readBodySafely(res, 1000)
       expect(value).toEqual({ audio: 'data' })
     })
+
+    // T-2（深度 review 批次 4）：HALF_OPEN 状态机覆盖——此前 OPEN/HALF_OPEN 转移零测试
+    it('OPEN 30s 后转 HALF_OPEN：探测成功 → CLOSED 恢复放行', async () => {
+      const host = 'https://half-open-ok.example'
+      const spy = vi.spyOn(globalThis, 'fetch')
+      // 5 次 500 打开熔断
+      spy.mockResolvedValue({ ok: false, status: 500 } as Response)
+      for (let i = 0; i < 5; i++) await fetchWithTimeout(host)
+      await expect(fetchWithTimeout(host)).rejects.toThrow(/Circuit breaker OPEN/)
+      // 未到 30s 仍拒
+      await vi.advanceTimersByTimeAsync(29_000)
+      await expect(fetchWithTimeout(host)).rejects.toThrow(/Circuit breaker OPEN/)
+      // 满 30s → HALF_OPEN 探测放行，成功则 CLOSED
+      spy.mockResolvedValue({ ok: true, status: 200 } as Response)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(fetchWithTimeout(host)).resolves.toMatchObject({ status: 200 })
+      // CLOSED 后连续放行（不再抛 OPEN）
+      await expect(fetchWithTimeout(host)).resolves.toMatchObject({ status: 200 })
+    })
+
+    it('OPEN 30s 后转 HALF_OPEN：探测失败 → 回 OPEN 继续拒', async () => {
+      const host = 'https://half-open-fail.example'
+      const spy = vi.spyOn(globalThis, 'fetch')
+      spy.mockResolvedValue({ ok: false, status: 500 } as Response)
+      for (let i = 0; i < 5; i++) await fetchWithTimeout(host)
+      await expect(fetchWithTimeout(host)).rejects.toThrow(/Circuit breaker OPEN/)
+      // 满 30s → HALF_OPEN 探测，网络层失败 → 回 OPEN
+      await vi.advanceTimersByTimeAsync(30_000)
+      spy.mockRejectedValueOnce(new Error('still down'))
+      await expect(fetchWithTimeout(host)).rejects.toThrow('still down')
+      // 回 OPEN：立即再调应被熔断拒（而非真发请求）
+      await expect(fetchWithTimeout(host)).rejects.toThrow(/Circuit breaker OPEN/)
+    })
   })
 })
