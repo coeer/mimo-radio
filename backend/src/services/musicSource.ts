@@ -26,6 +26,7 @@ const sources = new Map<string, MusicSource>()
 let qqReadyCache: boolean | null = null
 let qqReadyCacheTime = 0
 const QQ_READY_CACHE_TTL = 30000 // 30 秒内复用就绪检查结果
+let qqReadyInflight = false // B-1：isReady 异步刷新在途标记，防止 TTL 到期后并发多个 webbridgeEval
 
 export function registerMusicSource(source: MusicSource) {
   sources.set(source.id, source)
@@ -45,16 +46,20 @@ export function getMusicSource(): MusicSource {
   // 首选 QQ：检查就绪（用缓存避免频繁调 webbridge）
   if (preferred?.id === 'qq') {
     const now = Date.now()
-    if (qqReadyCache === null || now - qqReadyCacheTime > QQ_READY_CACHE_TTL) {
+    if ((qqReadyCache === null || now - qqReadyCacheTime > QQ_READY_CACHE_TTL) && !qqReadyInflight) {
       // 异步刷新缓存（不阻塞当前请求，本轮先用旧值/兜底）
+      // B-1：in-flight 去重——TTL 到期后连续调用不再并发多个 isReady（各 25s webbridgeEval）
+      qqReadyInflight = true
       preferred.isReady().then((ready) => {
         qqReadyCache = ready
         qqReadyCacheTime = Date.now()
         if (!ready) logger.warn('QQ 未就绪，本轮回落网易云', {})
       }).catch(() => { qqReadyCache = false; qqReadyCacheTime = Date.now() })
+        .finally(() => { qqReadyInflight = false })
     }
-    if (qqReadyCache === false) {
-      // QQ 明确未就绪 → 回落网易云
+    // B-1：qqReadyCache 为 null（冷启动未检）时本轮先回落网易云——
+    // 原实现 null≠false 直接返回 QQ，"智能回落"首轮失效（QQ 未就绪时首轮请求必失败）。
+    if (qqReadyCache !== true) {
       const netease = sources.get('netease')
       if (netease) return netease
     }

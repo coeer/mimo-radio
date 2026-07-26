@@ -210,7 +210,7 @@ ${sanitizePromptInput(userInput)}
     const prompt = `分析以下用户的音乐品味，给出人格类型和描述（50字以内）。
 
 用户歌曲（共${songs.length}首，展示前50首）：
-${songs.slice(0, 50).map(s => `${sanitizePromptInput(s.title)}(${sanitizePromptInput(s.artist)})[${s.emotionTags.join(',')}]`).join('; ')}
+${songs.slice(0, 50).map(s => `${sanitizePromptInput(s.title)}(${sanitizePromptInput(s.artist)})[${s.emotionTags.map(t => sanitizePromptInput(t)).join(',')}]`).join('; ')}
 
 输出JSON：
 {
@@ -220,7 +220,15 @@ ${songs.slice(0, 50).map(s => `${sanitizePromptInput(s.title)}(${sanitizePromptI
 
     const response = await this.chat([{ role: 'user', content: prompt }])
     try {
-      return JSON.parse(response.replace(/```json\n?|\n?```/g, ''))
+      // B-3：对齐 getRecommendationStrategy 的 extractJsonObject 写法——
+      // 原 replace(/```json...) 剥围栏后直接 parse，LLM 在 JSON 前后输出散文时必抛（裸文本无 ``` 围栏时原样 parse）。
+      const jsonText = extractJsonObject(response)
+      if (!jsonText) throw new Error('no JSON object found')
+      const json = JSON.parse(jsonText)
+      return {
+        type: typeof json.type === 'string' ? json.type : '音乐探索者',
+        description: typeof json.description === 'string' ? json.description : '你的音乐品味独特而多元',
+      }
     } catch {
       return { type: '音乐探索者', description: '你的音乐品味独特而多元' }
     }

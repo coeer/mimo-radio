@@ -88,7 +88,9 @@ export async function fetchWithTimeout(
   // 第一道：端口级白名单（127.0.0.1:10086 webbridge 等本地合法服务）
   if (SSRF_ALLOW_HOST_PORTS.has(hostname)) {
     const allowedPorts = SSRF_ALLOW_HOST_PORTS.get(hostname)!
-    const portNum = port ? parseInt(port, 10) : url.startsWith('https') ? 443 : 80
+    // B-6：原 url.startsWith('https') 会把 "httpsomething://..." 之类非法 scheme 误判为 443，
+    // 改为解析真实 protocol。
+    const portNum = port ? parseInt(port, 10) : new URL(url).protocol === 'https:' ? 443 : 80
     if (!allowedPorts.has(portNum)) {
       logger.warn('SSRF guard blocked request (port not allowed)', {
         hostname,

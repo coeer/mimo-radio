@@ -130,6 +130,11 @@ const KimiCard = memo(function KimiCard({ onSeek, getFrequencyData }: { onSeek?:
   // 收藏：本地切换 + 上报后端 feedback（形成品味闭环）
   // P6 修复：debounce 500ms，快速连点只发最后一次状态，避免触发 429 限流
   const likeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // F-5：unmount 时清掉未触发的 like debounce——否则组件卸载后 500ms 回调仍发 fetch，
+  // 且 likedNow 闭包是卸载前的旧状态（铁律 1：资源成对，setTimeout 必配 clearTimeout）。
+  useEffect(() => () => {
+    if (likeDebounceRef.current) clearTimeout(likeDebounceRef.current)
+  }, [])
   const handleLike = useCallback(() => {
     if (!currentSong) return
     toggleLike(currentSong.id)

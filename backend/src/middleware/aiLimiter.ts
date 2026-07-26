@@ -14,7 +14,8 @@ export const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'AI generation rate limit exceeded. Please slow down.' },
-  // 测试环境放行：路由测试 1 分钟内会多次调 /create 等端点，必命中 10/min 阈值。
+  // 测试/开发环境放行：路由测试 1 分钟内会多次调 /create 等端点，必命中 10/min 阈值；
+  // 开发环境本地联调反复触发也会误限。生产环境才启用限流。
   // 原实现挂在 index.ts（测试不 import index.ts，天然豁免）；移入路由后需显式豁免。
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV !== 'production',
 })
