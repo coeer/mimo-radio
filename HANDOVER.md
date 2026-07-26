@@ -3,6 +3,10 @@
 > 生成时间：2026-06-26
 > 用途：新会话快速接手 mimo-radio 项目当前状态
 >
+> **📌 2026-07-22 更新**：
+> - **双规划者深度 review 全部批次完成**——ZCode deep-review + KIMI cross-review + 联合裁决（`docs/ZCode/decisions/decision-deep-review-2026-07-22.md`，最终 4🔴/13🟡/14🔵/18✅）。KIMI 执行 4 批：P0 必修（lint/timer/withTimeout）→ F4 仲裁层闭环（N-1 方案 A / N-2 选项 a / prevSong 对齐 + 防重入 / 场景 8 真测试）→ settings previewVoice AbortController → 🟡/🔵 扫尾（B-1/B-3/B-5/B-6/N-4/F-5 + T-1/T-2/N-5）。报告：`docs/KIMI/reports/exec-*-2026-07-22-KIMI.md`。**遗留**：R-7 git PAT（用户操作）+ B-2/B-4/F-2/T-3（见批次 4 报告 §四）
+> - **测试基线**：后端 **313 passed / 33 文件**，前端 **211 passed / 25 文件**，tsc 双零，后端 lint 0 errors
+>
 > **📌 2026-07-18 更新**：
 > - **KIMI 评审修复批次（P0a/P0b/P1/P2）全部完成**——基于 `docs/KIMI/code-review-2026-07-17.md`（14 发现）+ `fix-plan-integrated-2026-07-17.md`，5 个 commit 落 master。要点：dj 路由路径级 body-parser（25/12mb）+ 413 识别；鉴权 fail-closed（显式 production 才严格）；收藏上报 action 反向修复；tasteCache 按 limit 分 key；fetchWithTimeout 5xx 熔断 + readBodySafely；useAudioPlayer cleanupRef / useTTS AbortController / PlayerBar 换歌重置；**UPnP 下线**；helmet 配置单一来源；端口口径统一（前端 3000）；aiLimiter 只挂 POST；tsconfig 排除测试编译；app 工厂 `createApp()`（`backend/src/app.ts`）。执行报告：`docs/KIMI/reports/exec-{p0b,p1,p0a,p2}-batch-2026-07-18-KIMI.md`
 > - **测试基线**：后端 **288 passed / 32 文件**，前端 **189 passed / 23 文件**，tsc 双零
@@ -91,9 +95,9 @@
 
 ## 三、当前代码状态
 
-### 测试状态（2026-07-18 最新）
-- **后端**：288 测试全过（32 个 test 文件），tsc 零错误
-- **前端**：189 测试全过（23 个 test 文件），tsc 零错误
+### 测试状态（2026-07-22 最新）
+- **后端**：313 测试全过（33 个 test 文件），tsc 零错误，lint 0 errors
+- **前端**：211 测试全过（25 个 test 文件），tsc 零错误
 - **Git**：master 分支，trunk-based，远程 `https://github.com/coeer/mimo-radio`（本地远程一致）
 
 ### 服务运行状态（会话结束时）
