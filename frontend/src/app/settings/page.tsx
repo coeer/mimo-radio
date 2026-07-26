@@ -43,6 +43,9 @@ export default function SettingsPage() {
   const setTtsVoice = useRadioStore((s) => s.setTtsVoice)
   const [previewing, setPreviewing] = useState<string | null>(null)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  // F-4（批次 3）：连点两个音色时 abort 上一个在途 fetch（复用 useTTS ttsAbortRef 模式），
+  // 原实现 A fetch 后 resolve 仍 play → 与 B 双音轨。
+  const previewAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/dj/tts-voices`, { headers: getApiHeaders(false) })
@@ -51,21 +54,24 @@ export default function SettingsPage() {
       .catch(() => {})
   }, [])
 
-  /** 试听某个音色：调 /tts 合成示例句并播放 */
+  /** 试听某个音色：调 /tts 合成示例句并播放。试听成功才设为当前音色。 */
   const previewVoice = useCallback(async (voice: VoiceInfo) => {
-    // 停掉上一个试听
+    // 停掉上一个试听（音频 + 在途 fetch）
     if (previewAudioRef.current) {
       previewAudioRef.current.pause()
       previewAudioRef.current = null
     }
+    previewAbortRef.current?.abort()
+    const controller = new AbortController()
+    previewAbortRef.current = controller
     setPreviewing(voice.id)
-    setTtsVoice(voice.id) // 选中即设为当前音色
     try {
       const text = voice.lang === 'zh' ? SAMPLE_TEXT_ZH : SAMPLE_TEXT_EN
       const res = await fetch(`${API_BASE}/api/v1/dj/tts`, {
         method: 'POST',
         headers: getApiHeaders(),
         body: JSON.stringify({ text, voice: voice.id }),
+        signal: controller.signal,
       })
       const data = await res.json()
       if (data.audio_url) {
@@ -74,19 +80,31 @@ export default function SettingsPage() {
           : `${API_BASE}${data.audio_url}`
         const audio = new Audio(url)
         previewAudioRef.current = audio
-        audio.onended = () => setPreviewing(null)
-        audio.onerror = () => setPreviewing(null)
+        audio.onended = () => {
+          if (previewAudioRef.current === audio) setPreviewing(null)
+        }
+        audio.onerror = () => {
+          if (previewAudioRef.current === audio) setPreviewing(null)
+        }
         await audio.play()
-      } else {
+        // 试听成功才设为当前音色（原"试听即 setTtsVoice"，试听失败也已改设置——KIMI 2026-07-17 F6）。
+        // 选"成功后才 set"而非"失败回滚"：回滚在连点竞态下（A 失败后于 B 成功返回）会用旧值覆盖新选择，
+        // 成功才 set 天然无此类问题。
+        setTtsVoice(voice.id)
+      } else if (previewAbortRef.current === controller) {
         setPreviewing(null)
       }
-    } catch {
-      setPreviewing(null)
+    } catch (err) {
+      // 被 abort 的请求静默退出（新一轮试听已接管 previewing 状态）
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      if (previewAbortRef.current === controller) setPreviewing(null)
     }
   }, [setTtsVoice])
 
   useEffect(() => {
     return () => {
+      // 铁律 1：卸载时成对清理——abort 在途 fetch + 停音频
+      previewAbortRef.current?.abort()
       if (previewAudioRef.current) {
         previewAudioRef.current.pause()
       }
