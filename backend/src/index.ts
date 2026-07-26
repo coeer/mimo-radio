@@ -54,11 +54,17 @@ registerTtsEngine(mimoCloneTts)
 setCurrentTtsEngine(config.ttsEngine)
 
 const PORT = config.port
+// R-1 + N-6（深度 review 批次 1）：后台 timer 的停止句柄集中保存在模块级，
+// gracefulShutdown 统一调用——铁律 1：资源分配与清理成对。
+// 启动失败路径（initDb 抛错 / listen error）在 listen 回调之前退出，两句柄保持 null，语义完整。
+let stopAudioCleanup: (() => void) | null = null
+let plannerWarmupTimer: ReturnType<typeof setTimeout> | null = null
 const server = app.listen(PORT, async () => {
   startSessionCleanup()
   // B2-5 (2026-07-22)：feedback TTL 清理（90 天）
   startFeedbackCleanup()
-  startPeriodicCleanup(resolve(process.cwd(), 'static/audio'))
+  // R-1：接住 dispose（原返回值被丢弃，gracefulShutdown 漏清第三个 timer）
+  stopAudioCleanup = startPeriodicCleanup(resolve(process.cwd(), 'static/audio'))
   logger.info('Server started', { port: PORT, env: config.nodeEnv })
   // 启动后清理过期日志（不阻塞服务）
   const deleted = await cleanupOldLogs()
@@ -67,7 +73,8 @@ const server = app.listen(PORT, async () => {
   }
 
   // Q1 修复：启动后异步预热 planner，首次用户访问大概率命中缓存
-  setTimeout(async () => {
+  // N-6：句柄存模块级，gracefulShutdown 可 clear（原无句柄无清理，SIGTERM 3s 窗口内挂 event loop）
+  plannerWarmupTimer = setTimeout(async () => {
     try {
       const { generateDailyPlan } = await import('./services/planner')
       const { getAIService } = await import('./services/aiFactory')
@@ -118,6 +125,14 @@ function gracefulShutdown(signal: string) {
   logger.info(`Received ${signal}, shutting down gracefully`)
   stopSessionCleanup()
   stopFeedbackCleanup()
+  // R-1：清 fileCleanup 的 setInterval（原漏调的第三个 timer）
+  stopAudioCleanup?.()
+  stopAudioCleanup = null
+  // N-6：清 planner 预热 timer（3s 窗口内收到信号时阻止预热启动）
+  if (plannerWarmupTimer) {
+    clearTimeout(plannerWarmupTimer)
+    plannerWarmupTimer = null
+  }
   server.close((err) => {
     if (err) logger.error('Error closing server', { ...toErrorMeta(err) })
     process.exit(0)

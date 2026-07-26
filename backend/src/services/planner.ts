@@ -151,11 +151,24 @@ async function resolveTracks(segments: PlanSegment[]) {
   }))
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
-  ])
+// R-2（深度 review 批次 1）：对齐 fetchWithTimeout.ts 的 readBodySafely 写法——
+// async + await 让 finally 在 race settle 之后才执行，timer ref + finally clearTimeout。
+// 原实现 setTimeout 永不清理，race 先 settle 后 timer 仍挂到超时触发（每次计划泄漏一批
+// ≤8s 的 timer）。race 语义不变：首个 settle 胜出；timer 被 clear 后不再 reject，
+// 不会产生 unhandledRejection。
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      p,
+      new Promise<T>((_, rej) => {
+        timer = setTimeout(() => rej(new Error('timeout')), ms)
+      }),
+    ])
+  } finally {
+    // 铁律 1：timer 分配与清理成对出现在同一个 try/finally 里
+    if (timer) clearTimeout(timer)
+  }
 }
 
 /** 兜底计划（AI 失败时用写死时段） */
