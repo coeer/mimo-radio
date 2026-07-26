@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useRadioStore } from './radioStore'
 
 /**
@@ -12,7 +12,8 @@ import { useRadioStore } from './radioStore'
  *   5. autoplay 被拒 → system pause 生效，UI 显示暂停态
  *   6. 重复 play 请求 → no-op，无多余 set
  *   7. intro 流程（已验证链路）→ unlockAudio → intro → onEnd → 续播第一首，不回归
- *   8. nextSong 自动切歌时旧 transition TTS 还在播 → onEnd → 仲裁丢弃
+ *   8. DJ 说话中真调 mock fetch 的 nextSong → 切歌 + R3 挂起 → 说完消费续播（R-5 重写）
+ *   8b. 用户暂停态点下一首 → 普通路径 isPlaying=true（走向 1）
  */
 
 const SONG = {
@@ -172,28 +173,72 @@ describe('F4 playRequest 仲裁层（场景 1-8）', () => {
     expect(useRadioStore.getState().isPlaying).toBe(false)
   })
 
-  // ─── 场景 8：nextSong 自动切歌时旧 transition TTS 还在播 → onEnd 丢弃 ──
-  // 模拟链路：nextSong(阶段1 切歌) → 旧 transition onEnd → playRequest('play','dj')
-  // 阶段 1 切歌时不置位 isPlaying=true（两阶段改法）；旧 transition 的 resumePlaybackAfterSpeak
-  // 在 setSpeaking(false) 后调 playRequest('play','dj')，此时 isPlaying=false→true，OK 不算"丢弃"。
-  // 真正的场景 8：nextSong 已阶段 1 切了 currentSong，阶段 2 playRequest('play','auto')
-  // 此时若 isSpeaking=true（DJ 还在播旧 transition），auto 被 R3 挂起 → pendingResume。
-  it('场景8：nextSong 阶段 2 auto play + isSpeaking=true → 挂起为 pendingResume（不复活旧歌）', async () => {
-    const s = useRadioStore.getState()
-    s.setQueue([SONG, SONG2])
-    s.setCurrentSong(SONG)
-    s.setSpeaking(true)  // 旧 transition 还在播
-    s.setIsPlaying(false)
+  // ─── 场景 8（R-5 重写，F4 闭环）：真调 mock fetch 的 nextSong，断言终态 ──
+  // 原实现只手摆 playRequest，断言的中间态在生产不可达（N-1：阶段 2 恒被 R2 吞）。
+  // N-1 修复后阶段 2 在 finally 复位后真实仲裁，本场景验证完整闭环：
+  //   DJ 说话中 nextSong → 阶段 1 切歌 → 阶段 2 R3 挂起 → DJ 说完消费续播（矩阵场景 11）
+  it('场景8：DJ 说话中 nextSong（真 mock fetch）→ 切歌 + R3 挂起 → 说完消费续播', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ song: SONG2 }),
+    })))
+    try {
+      const s = useRadioStore.getState()
+      useRadioStore.setState({ sessionId: 'sess_test', sessionToken: 'tok_test' })
+      s.setQueue([SONG, SONG2])
+      s.setCurrentSong(SONG)
+      s.setSpeaking(true)  // DJ（旧 transition）还在播
+      s.setIsPlaying(false)
 
-    // 模拟 nextSong 阶段 2（不调真 fetch，只模拟 playRequest）
-    s.playRequest('play', 'auto')
+      await s.nextSong()
 
-    const after = useRadioStore.getState()
-    // R3 speaking 锁：auto play 挂起为 pendingResume，不直接置 isPlaying=true
-    // 这样旧歌不会"复活"——isPlaying=false，audio 已停，新歌也不会启动
-    expect(after.pendingResume).toBe(true)
-    // 注：场景 8 的核心是"旧歌不复活"，即 isPlaying 不应是 true（除非是 user 操作）
-    expect(after.isPlaying).toBe(false)
+      const mid = useRadioStore.getState()
+      // 阶段 1 切歌完成
+      expect(mid.currentSong?.id).toBe('ne_2')
+      expect(mid.isTransitioning).toBe(false)
+      // 阶段 2（finally 后真实仲裁）：isSpeaking=true → R3 挂起，不直接置位
+      expect(mid.isPlaying).toBe(false)
+      expect(mid.pendingResume).toBe(true)
+
+      // 模拟 DJ 说完：resumePlaybackAfterSpeak 链路（setSpeaking(false) + playRequest('play','dj')）
+      mid.setSpeaking(false)
+      mid.playRequest('play', 'dj')
+
+      const after = useRadioStore.getState()
+      // N-2 消费闭环：普通路径恢复播放并清 pendingResume
+      expect(after.isPlaying).toBe(true)
+      expect(after.pendingResume).toBe(false)
+      expect(after.currentSong?.id).toBe('ne_2')
+    } finally {
+      vi.unstubAllGlobals()
+      useRadioStore.setState({ sessionId: null, sessionToken: null })
+    }
+  })
+
+  // ─── 场景 8b（走向 1，§1.2 矩阵场景 8）：用户暂停态点下一首 → 新歌播放 ──
+  // ZCode 裁决：R5 在 play + isPlaying=false 时不短路，请求穿透普通路径 → isPlaying=true
+  it('场景8b：暂停态（无 DJ）nextSong → 普通路径 isPlaying=true（走向 1）', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ song: SONG2 }),
+    })))
+    try {
+      const s = useRadioStore.getState()
+      useRadioStore.setState({ sessionId: 'sess_test', sessionToken: 'tok_test' })
+      s.setQueue([SONG, SONG2])
+      s.setCurrentSong(SONG)
+      s.setIsPlaying(false)  // 用户暂停态
+
+      await s.nextSong()
+
+      const after = useRadioStore.getState()
+      expect(after.currentSong?.id).toBe('ne_2')
+      expect(after.isPlaying).toBe(true)   // 普通路径直接置位（非 R5 幂等）
+      expect(after.pendingResume).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+      useRadioStore.setState({ sessionId: null, sessionToken: null })
+    }
   })
 })
 
@@ -243,6 +288,38 @@ describe('F4 nextSong/prevSong 两阶段（ZCode §3.1）', () => {
     s.setCurrentSong(SONG)
     s.prevSong()
     expect(useRadioStore.getState().currentSong?.id).toBe('ne_1')
+  })
+
+  // 矩阵场景 9（N-3）：nextSong fetch 在途时点 prev → 防重入拒绝，用户选择不被慢返回覆盖
+  it('场景9：isTransitioning=true 时点 prevSong → 拒绝，状态不变', () => {
+    const s = useRadioStore.getState()
+    s.setQueue([SONG, SONG2])
+    s.setCurrentSong(SONG2)
+    s.setIsTransitioning(true)
+    s.setIsPlaying(false)
+
+    s.prevSong()
+
+    const after = useRadioStore.getState()
+    expect(after.currentSong?.id).toBe('ne_2')  // 未切歌
+    expect(after.isPlaying).toBe(false)
+    expect(after.pendingResume).toBe(false)
+  })
+
+  // 矩阵场景 10（R-3）：DJ 说话中点上一首 → source='auto' 走 R3 挂起（对齐 nextSong）
+  it('场景10：DJ 说话中点 prevSong → 切歌 + R3 挂起 pendingResume', () => {
+    const s = useRadioStore.getState()
+    s.setQueue([SONG, SONG2])
+    s.setCurrentSong(SONG2)
+    s.setSpeaking(true)
+    s.setIsPlaying(false)
+
+    s.prevSong()
+
+    const after = useRadioStore.getState()
+    expect(after.currentSong?.id).toBe('ne_1')  // 阶段 1 切歌生效
+    expect(after.isPlaying).toBe(false)          // R3 挂起，不在说话窗口置位
+    expect(after.pendingResume).toBe(true)
   })
 })
 

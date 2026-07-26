@@ -309,22 +309,38 @@ const createRadioActionsSlice: StateCreator<
     }
 
     // 普通路径：直接置位（R4 system pause 也走此分支，因为 pause + 非 speaking）
-    _set({ isPlaying: nextPlaying }, false, 'player/playRequest')
+    // N-2（F4 闭环）：pendingResume 在此真实消费——仅在"恢复播放"（nextPlaying=true）时清 false；
+    // pause 路径不清（§1.2 矩阵场景 5：system pause 后 pendingResume 不变）。
+    // pendingResume 仅作内部状态，UI 不订阅；唯一消费出口是 resumePlaybackAfterSpeak
+    // （setSpeaking(false) 后调 playRequest('play','dj') 走到这里）。
+    _set(
+      nextPlaying ? { isPlaying: nextPlaying, pendingResume: false } : { isPlaying: nextPlaying },
+      false,
+      'player/playRequest',
+    )
   },
   prevSong: () => {
+    // N-3（F4 闭环）：防重入对齐 nextSong T1.1——nextSong fetch 在途时拒绝 prev，
+    // 避免慢返回的阶段 1 覆盖用户刚切的上一首（用户感知：点了没反应，可再点）。
+    if (get().isTransitioning) return
     const { queue, currentSong } = get()
     const currentIndex = queue.findIndex((s) => s.id === currentSong?.id)
     const prev = queue[currentIndex - 1]
     if (!prev) return
     // F4 §3.1 两阶段：阶段 1 只切歌（不动 isPlaying），阶段 2 经 playRequest 仲裁
     _set({ currentSong: prev, currentTime: 0 }, false, 'radio/prevSong')
-    get().playRequest('play', 'user')
+    // R-3（F4 闭环）：source 对齐 nextSong 的 'auto'——DJ 说话中点上一首走 R3 挂起
+    // pendingResume，DJ 说完消费续播（原 'user' 穿透 R1 导致说话窗口 UI 假 On Air）。
+    get().playRequest('play', 'auto')
   },
   nextSong: async () => {
     const { sessionId, sessionToken, isTransitioning } = get()
     // T1.1 防重入：正在换歌时不重复触发
     if (isTransitioning) return
     get().setIsTransitioning(true)
+    // N-1（F4 闭环，方案 A）：switched 标志——三条路径只负责阶段 1 切歌并置标志；
+    // 阶段 2 的仲裁请求统一在 finally 复位后单次发出（避免 data.song 为空时误发）。
+    let switched = false
     try {
       if (sessionId) {
         try {
@@ -350,8 +366,7 @@ const createRadioActionsSlice: StateCreator<
               updates.queue = [...queue, data.song]
             }
             _set(updates, false, 'radio/nextSong')
-            // 阶段 2：仲裁决定是否播放（auto 源）
-            get().playRequest('play', 'auto')
+            switched = true
 
             if (data.transition) {
               addMessage({ sender: 'kimi', text: data.transition, timestamp: Date.now() })
@@ -368,7 +383,7 @@ const createRadioActionsSlice: StateCreator<
           if (next) {
             // F4 §3.1：fallback 路径同样两阶段
             _set({ currentSong: next, currentTime: 0 }, false, 'radio/nextSong/fallback')
-            get().playRequest('play', 'auto')
+            switched = true
           }
         }
       } else {
@@ -378,12 +393,17 @@ const createRadioActionsSlice: StateCreator<
         if (next) {
           // F4 §3.1：本地路径同样两阶段
           _set({ currentSong: next, currentTime: 0 }, false, 'radio/nextSong/local')
-          get().playRequest('play', 'auto')
+          switched = true
         }
       }
     } finally {
       get().setIsTransitioning(false)
     }
+    // N-1（方案 A）：阶段 2 移到 finally 复位 isTransitioning 之后——
+    // 原实现在 try 块内调 playRequest('play','auto')，恒被 R2 transition 锁吞掉（死路径）。
+    // 现在在非 transition 状态下真实仲裁：说话中→R3 挂起；普通→直接置位；
+    // 用户暂停态点下一首→普通路径 isPlaying=true（走向 1，§1.2 矩阵场景 8）。
+    if (switched) get().playRequest('play', 'auto')
   },
   clearSession: () =>
     _set(
